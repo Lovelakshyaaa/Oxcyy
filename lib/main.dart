@@ -6,7 +6,6 @@ import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/home_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 
-// THIS IS THE KEY PART THAT WAS MISSING
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
