@@ -12,16 +12,29 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _controller = TextEditingController();
-  
-  // No local state needed for results anymore, the Provider manages it!
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // INFINITE SCROLL LISTENER
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
+        Provider.of<MusicProvider>(context, listen: false).loadMore();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final musicProvider = Provider.of<MusicProvider>(context);
 
-    // If player is full screen, we hide the home screen content slightly to save resources
-    // but we keep it in the tree so it doesn't lose state.
-    
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Container(
@@ -56,7 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         controller: _controller,
                         style: GoogleFonts.poppins(color: Colors.white),
                         decoration: InputDecoration(
-                          hintText: "Search songs, artist...",
+                          hintText: "Search songs & albums...",
                           hintStyle: TextStyle(color: Colors.white54),
                           border: InputBorder.none,
                           icon: Icon(Icons.search, color: Colors.white54),
@@ -67,6 +80,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         onSubmitted: (val) async {
                           if (val.trim().isEmpty) return;
+                          // Dismiss keyboard
+                          FocusScope.of(context).unfocus();
                           await musicProvider.search(val);
                         },
                       ),
@@ -75,39 +90,70 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               
-              // Results List
+              // Search Results
               Expanded(
-                child: musicProvider.queue.isEmpty
+                child: musicProvider.searchResults.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.music_note_outlined, size: 60, color: Colors.white24),
                           SizedBox(height: 10),
-                          Text("Search to start listening", style: TextStyle(color: Colors.white24)),
+                          Text("Search for music...", style: TextStyle(color: Colors.white24)),
                         ],
                       ),
                     )
                   : ListView.builder(
-                      padding: EdgeInsets.only(bottom: 100), // Space for Mini Player
-                      itemCount: musicProvider.queue.length,
+                      controller: _scrollController, // Attach Scroll Controller
+                      padding: EdgeInsets.only(bottom: 100),
+                      itemCount: musicProvider.searchResults.length + (musicProvider.isFetchingMore ? 1 : 0),
                       itemBuilder: (context, index) {
-                        final song = musicProvider.queue[index];
+                        // Show Loading Spinner at bottom
+                        if (index == musicProvider.searchResults.length) {
+                          return Center(child: Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator()));
+                        }
+
+                        final song = musicProvider.searchResults[index];
+                        final isAlbum = song.type == 'playlist';
+
                         return ListTile(
                           contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CachedNetworkImage(
-                              imageUrl: song.thumbUrl,
-                              width: 50, height: 50, fit: BoxFit.cover,
-                            ),
+                          leading: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: CachedNetworkImage(
+                                  imageUrl: song.thumbUrl,
+                                  width: 50, height: 50, fit: BoxFit.cover,
+                                ),
+                              ),
+                              // Show Disc icon if it's an Album
+                              if (isAlbum)
+                                Container(
+                                  width: 50, height: 50,
+                                  color: Colors.black54,
+                                  child: Icon(Icons.album, color: Colors.white),
+                                )
+                            ],
                           ),
-                          title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white)),
-                          subtitle: Text(song.artist, style: GoogleFonts.poppins(color: Colors.white70)),
+                          title: Text(
+                            song.title, 
+                            maxLines: 1, 
+                            overflow: TextOverflow.ellipsis, 
+                            style: GoogleFonts.poppins(color: Colors.white, fontWeight: isAlbum ? FontWeight.bold : FontWeight.normal)
+                          ),
+                          subtitle: Text(
+                            isAlbum ? "Album • ${song.artist}" : "Song • ${song.artist}", 
+                            style: GoogleFonts.poppins(color: Colors.white70)
+                          ),
                           onTap: () {
-                            musicProvider.play(song);
-                            // NOTE: We do NOT use Navigator.push anymore.
-                            // The Provider handles the state, and the Stack in MainScaffold shows the player.
+                            if (isAlbum) {
+                              musicProvider.playPlaylist(song);
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Loading Album...")));
+                            } else {
+                              musicProvider.play(song);
+                            }
                           },
                         );
                       },
