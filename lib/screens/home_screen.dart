@@ -3,8 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:myapp/providers/music_provider.dart';
-import 'package:myapp/screens/player_screen.dart';
+import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/screens/player_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
