@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:just_audio_background/just_audio_background.dart'; // Import this
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/home_screen.dart';
-import 'package:oxcy/screens/player_screen.dart'; // Import the new SmartPlayer
+import 'package:oxcy/screens/player_screen.dart';
 
-void main() {
+Future<void> main() async {
+  // 1. Initialize Background Service
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
+  
   runApp(
     MultiProvider(
       providers: [
@@ -26,22 +34,18 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Color(0xFF0F0C29),
         textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
       ),
-      home: MainScaffold(), // Use the new wrapper
+      home: MainScaffold(),
     );
   }
 }
 
-// THE STACK ARCHITECTURE
 class MainScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. The Home Screen (Bottom Layer)
           HomeScreen(),
-          
-          // 2. The Smart Player (Top Layer - Floating)
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: SmartPlayer(),
