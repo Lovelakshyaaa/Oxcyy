@@ -1,243 +1,59 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/screens/home_screen.dart';
+import 'package:oxcy/screens/player_screen.dart';
 
-// Enhanced Model
-class Song {
-  final String id;
-  final String title;
-  final String artist;
-  final String thumbUrl;
-  final String type; // 'video' or 'playlist'
-
-  Song({
-    required this.id, 
-    required this.title, 
-    required this.artist, 
-    required this.thumbUrl,
-    this.type = 'video',
-  });
+// THIS IS THE KEY PART THAT WAS MISSING
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
+  
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => MusicProvider()),
+      ],
+      child: MyApp(),
+    ),
+  );
 }
 
-class MusicProvider with ChangeNotifier {
-  static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
-  
-  final _yt = YoutubeExplode();
-  final _player = AudioPlayer();
-  
-  // State
-  List<Song> _searchResults = []; // What you see on Home
-  List<Song> _queue = [];         // What is playing
-  int _currentIndex = -1;
-  
-  // Pagination State
-  String? _nextPageToken;
-  String _currentQuery = "";
-  bool _isFetchingMore = false;
-  
-  // UI State
-  bool _isMiniPlayerVisible = false;
-  bool _isPlayerExpanded = false;
-  bool _isShuffling = false;
-  LoopMode _loopMode = LoopMode.off;
-
-  // Getters
-  AudioPlayer get player => _player;
-  List<Song> get searchResults => _searchResults;
-  List<Song> get queue => _queue;
-  Song? get currentSong => (_currentIndex >= 0 && _currentIndex < _queue.length) ? _queue[_currentIndex] : null;
-  bool get isMiniPlayerVisible => _isMiniPlayerVisible;
-  bool get isPlayerExpanded => _isPlayerExpanded;
-  bool get isShuffling => _isShuffling;
-  LoopMode get loopMode => _loopMode;
-  bool get isFetchingMore => _isFetchingMore;
-
-  MusicProvider() {
-    _player.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
-        next();
-      }
-      notifyListeners();
-    });
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'OXCY',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: Color(0xFF0F0C29),
+        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+      ),
+      home: MainScaffold(),
+    );
   }
+}
 
-  // --- SEARCH & INFINITE SCROLL ---
-
-  Future<void> search(String query) async {
-    _currentQuery = query;
-    _searchResults = [];
-    _nextPageToken = null;
-    notifyListeners();
-    
-    await _fetchPage();
-  }
-
-  Future<void> loadMore() async {
-    if (_isFetchingMore || _nextPageToken == null) return;
-    _isFetchingMore = true;
-    notifyListeners();
-    
-    await _fetchPage();
-    
-    _isFetchingMore = false;
-    notifyListeners();
-  }
-
-  Future<void> _fetchPage() async {
-    try {
-      String url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$_currentQuery&type=video,playlist&maxResults=20&key=$_apiKey';
-      if (_nextPageToken != null) {
-        url += "&pageToken=$_nextPageToken";
-      }
-
-      final response = await http.get(Uri.parse(url));
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        _nextPageToken = data['nextPageToken']; // Save token for next scroll
-        List<dynamic> items = data['items'];
-        
-        List<Song> newResults = items.map((item) {
-           var thumbs = item['snippet']['thumbnails'];
-           String img = thumbs['high']['url'];
-           if (thumbs.containsKey('maxres')) img = thumbs['maxres']['url'];
-
-           String id = item['id']['videoId'] ?? item['id']['playlistId'];
-           String kind = item['id']['kind'] == "youtube#playlist" ? 'playlist' : 'video';
-
-          return Song(
-            id: id,
-            title: item['snippet']['title'],
-            artist: item['snippet']['channelTitle'],
-            thumbUrl: img,
-            type: kind,
-          );
-        }).toList();
-        
-        _searchResults.addAll(newResults);
-        notifyListeners();
-      }
-    } catch (e) {
-      print("API Error: $e");
-    }
-  }
-
-  // --- PLAYBACK LOGIC ---
-
-  // 1. Play a Single Song (Video)
-  Future<void> play(Song song) async {
-    // If it's a new context, we can treat it as a single song queue or append
-    // For simplicity: We make a new queue of just this song (or surronding results)
-    // Here we just play it directly.
-    _queue = [song];
-    _currentIndex = 0;
-    
-    _isMiniPlayerVisible = true;
-    _isPlayerExpanded = true;
-    await _loadAndPlay();
-  }
-
-  // 2. Play an Album (Playlist)
-  Future<void> playPlaylist(Song album) async {
-    // Show mini player loading state if you want, or just wait
-    // We use YoutubeExplode to get tracks because it's free and handles playlists well
-    try {
-      var playlist = await _yt.playlists.get(album.id);
-      var videos = _yt.playlists.getVideos(playlist.id);
-      
-      List<Song> albumSongs = [];
-      await for (var video in videos) {
-        albumSongs.add(Song(
-          id: video.id.value,
-          title: video.title,
-          artist: video.author,
-          thumbUrl: video.thumbnails.highResUrl,
-          type: 'video',
-        ));
-        // Load first 50 to avoid waiting forever
-        if (albumSongs.length >= 50) break;
-      }
-
-      if (albumSongs.isNotEmpty) {
-        _queue = albumSongs;
-        _currentIndex = 0;
-        _isMiniPlayerVisible = true;
-        _isPlayerExpanded = true;
-        await _loadAndPlay();
-      }
-      
-    } catch (e) {
-      print("Playlist Error: $e");
-    }
-  }
-
-  // --- STANDARD CONTROLS (Next, Prev, Shuffle) ---
-  
-  Future<void> next() async {
-    if (_queue.isEmpty) return;
-    if (_currentIndex < _queue.length - 1) {
-      _currentIndex++;
-    } else {
-      _currentIndex = 0;
-    }
-    await _loadAndPlay();
-  }
-
-  Future<void> previous() async {
-    if (_queue.isEmpty) return;
-    if (_player.position.inSeconds > 3) {
-      _player.seek(Duration.zero);
-    } else if (_currentIndex > 0) {
-      _currentIndex--;
-      await _loadAndPlay();
-    }
-  }
-
-  Future<void> _loadAndPlay() async {
-    notifyListeners();
-    try {
-      final song = _queue[_currentIndex];
-      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
-      var audioUrl = manifest.audioOnly.withHighestBitrate().url;
-      
-      final source = AudioSource.uri(
-        audioUrl,
-        tag: MediaItem(
-          id: song.id,
-          album: "OXCY Music",
-          title: song.title,
-          artist: song.artist,
-          artUri: Uri.parse(song.thumbUrl),
-        ),
-      );
-      
-      await _player.setAudioSource(source);
-      _player.play();
-    } catch (e) {
-      print("Audio Error: $e");
-      _player.stop();
-    }
-  }
-  
-  // UI Helpers
-  void togglePlayerView() { _isPlayerExpanded = !_isPlayerExpanded; notifyListeners(); }
-  void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
-  void togglePlayPause() { if (_player.playing) _player.pause(); else _player.play(); }
-  
-  Future<void> toggleShuffle() async {
-    _isShuffling = !_isShuffling;
-    if (_isShuffling) _queue.shuffle();
-    notifyListeners();
-  }
-
-  Future<void> toggleLoop() async {
-     // (Same loop logic as before)
-    if (_loopMode == LoopMode.off) { _loopMode = LoopMode.one; await _player.setLoopMode(LoopMode.one); }
-    else if (_loopMode == LoopMode.one) { _loopMode = LoopMode.all; await _player.setLoopMode(LoopMode.all); }
-    else { _loopMode = LoopMode.off; await _player.setLoopMode(LoopMode.off); }
-    notifyListeners();
+class MainScaffold extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          HomeScreen(),
+          Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: SmartPlayer(),
+          ),
+        ],
+      ),
+    );
   }
 }
