@@ -1,83 +1,86 @@
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 
+// 1. Custom Model to hold API Data
+class Song {
+  final String id;
+  final String title;
+  final String artist;
+  final String thumbUrl;
+
+  Song({required this.id, required this.title, required this.artist, required this.thumbUrl});
+}
+
 class MusicProvider with ChangeNotifier {
-  final YoutubeExplode _youtubeExplode = YoutubeExplode();
-  final AudioPlayer _audioPlayer = AudioPlayer();
-
-  List<Video> _searchResults = [];
-  Video? _currentVideo;
+  // 2. YOUR API KEY
+  static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
+  
+  final _yt = YoutubeExplode();
+  final _player = AudioPlayer();
+  
   bool _isLoading = false;
-  bool _isPlaying = false;
-
-  List<Video> get searchResults => _searchResults;
-  Video? get currentVideo => _currentVideo;
   bool get isLoading => _isLoading;
-  bool get isPlaying => _isPlaying;
-  AudioPlayer get audioPlayer => _audioPlayer;
+  
+  Song? _currentSong;
+  Song? get currentSong => _currentSong;
+  
+  AudioPlayer get player => _player;
 
-  MusicProvider() {
-    _audioPlayer.playerStateStream.listen((playerState) {
-      if (playerState.processingState == ProcessingState.completed) {
-        _isPlaying = false;
-      } else {
-        _isPlaying = playerState.playing;
+  // 3. NEW: Search using Official API (Instant Results)
+  Future<List<Song>> search(String query) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    try {
+      final url = Uri.parse(
+        'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$query&type=video&maxResults=15&key=$_apiKey'
+      );
+      
+      final response = await http.get(url);
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        List<dynamic> items = data['items'];
+        
+        List<Song> songs = items.map((item) {
+          return Song(
+            id: item['id']['videoId'],
+            title: item['snippet']['title'],
+            artist: item['snippet']['channelTitle'],
+            thumbUrl: item['snippet']['thumbnails']['high']['url'],
+          );
+        }).toList();
+        
+        _isLoading = false;
+        notifyListeners();
+        return songs;
       }
-      notifyListeners();
-    });
+    } catch (e) {
+      print("API Error: $e");
+    }
+    
+    _isLoading = false;
+    notifyListeners();
+    return [];
   }
 
-  Future<void> search(String query) async {
-    if (query.isEmpty) return;
-
-    _isLoading = true;
+  // 4. Play Logic (Uses Version 3.0.5 features)
+  Future<void> play(Song song) async {
+    _currentSong = song;
     notifyListeners();
 
     try {
-      var searchList = await _youtubeExplode.search.getVideos(query);
-      _searchResults = searchList.toList();
+      // Get the actual audio stream using the ID we found
+      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
+      var audioUrl = manifest.audioOnly.withHighestBitrate().url;
+      
+      await _player.setUrl(audioUrl.toString());
+      _player.play();
     } catch (e) {
-      _searchResults = [];
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      print("Audio Error: $e");
     }
-  }
-
-  Future<void> play(Video video) async {
-    _currentVideo = video;
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      var manifest = await _youtubeExplode.videos.streamsClient.getManifest(video.id);
-      var audioStreamInfo = manifest.audioOnly.withHighestBitrate();
-      var streamUrl = audioStreamInfo.url;
-
-      await _audioPlayer.setUrl(streamUrl.toString());
-      _audioPlayer.play();
-    } catch (e) {
-      // Handle error
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  void pause() {
-    _audioPlayer.pause();
-  }
-
-  void resume() {
-    _audioPlayer.play();
-  }
-
-  @override
-  void dispose() {
-    _youtubeExplode.close();
-    _audioPlayer.dispose();
-    super.dispose();
   }
 }
