@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import '../clients.dart'; // Ensure lib/clients.dart exists!
+import '../clients.dart'; // Ensure this file exists in lib/clients.dart
 
 class Song {
   final String id;
@@ -27,13 +27,13 @@ class MusicProvider with ChangeNotifier {
   
   final _yt = YoutubeExplode();
   
-  // FIXED: Removed 'const' because AndroidLoadControl is not a constant
+  // FIXED: Removed 'const' to prevent "Not a constant expression" errors
   final _player = AudioPlayer(
     audioLoadConfiguration: AudioLoadConfiguration(
       androidLoadControl: AndroidLoadControl(
-        maxBufferDuration: Duration(seconds: 60),
-        bufferForPlaybackDuration: Duration(milliseconds: 500),
-        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
+        maxBufferDuration: const Duration(seconds: 60),
+        bufferForPlaybackDuration: const Duration(milliseconds: 500),
+        bufferForPlaybackAfterRebufferDuration: const Duration(seconds: 3),
       ),
     ),
   );
@@ -70,7 +70,7 @@ class MusicProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   MusicProvider() {
-    // FIXED: Removed 'const' here too
+    // FIXED: Removed 'const' here as well
     _player.setAndroidAudioAttributes(
       AndroidAudioAttributes(
         contentType: AndroidAudioContentType.music,
