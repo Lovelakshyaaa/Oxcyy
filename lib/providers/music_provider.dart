@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import '../clients.dart'; // Ensure this points to your clients.dart file
+import '../clients.dart'; // Ensure lib/clients.dart exists!
 
 class Song {
   final String id;
@@ -27,11 +27,9 @@ class MusicProvider with ChangeNotifier {
   
   final _yt = YoutubeExplode();
   
-  // 1. MUSIFY'S PLAYER CONFIGURATION
-  // This is the "Engine Tuning" we were missing. 
-  // It forces the player to accept streams faster (500ms buffer).
+  // FIXED: Removed 'const' because AndroidLoadControl is not a constant
   final _player = AudioPlayer(
-    audioLoadConfiguration: const AudioLoadConfiguration(
+    audioLoadConfiguration: AudioLoadConfiguration(
       androidLoadControl: AndroidLoadControl(
         maxBufferDuration: Duration(seconds: 60),
         bufferForPlaybackDuration: Duration(milliseconds: 500),
@@ -40,7 +38,7 @@ class MusicProvider with ChangeNotifier {
     ),
   );
   
-  // 2. MUSIFY'S CLIENT LIST
+  // The Secret Musify Clients
   final List<YoutubeApiClient> _clients = [customAndroidVr, customAndroidSdkless];
 
   List<Song> _searchResults = []; 
@@ -72,9 +70,9 @@ class MusicProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   MusicProvider() {
-    // 3. SET ANDROID ATTRIBUTES (Musify does this to keep background audio alive)
+    // FIXED: Removed 'const' here too
     _player.setAndroidAudioAttributes(
-      const AndroidAudioAttributes(
+      AndroidAudioAttributes(
         contentType: AndroidAudioContentType.music,
         usage: AndroidAudioUsage.media,
       ),
@@ -222,7 +220,7 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // 4. USE FAKE CLIENTS TO GET MANIFEST
+      // CRITICAL: Using Musify's Client Identity (VR Headset)
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
         ytClients: _clients 
