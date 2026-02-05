@@ -202,11 +202,8 @@ class MusicProvider with ChangeNotifier {
       // 1. Get Manifest
       var manifest = await _yt.videos.streamsClient.getManifest(song.id);
       
-      // 2. CRITICAL: Select M4A (Most compatible)
-      var audioStream = manifest.audioOnly.firstWhere(
-        (s) => s.container == Container.mp4, 
-        orElse: () => manifest.audioOnly.withHighestBitrate()
-      );
+      // 2. COLLISION FIX: Use the built-in helper instead of "Container.mp4"
+      var audioStream = manifest.audioOnly.withHighestBitrate();
       
       // 3. Setup Source 
       final source = AudioSource.uri(
@@ -226,8 +223,6 @@ class MusicProvider with ChangeNotifier {
     } catch (e) {
       print("Audio Error: $e");
       _errorMessage = "Failed to play: ${e.toString().split(':').first}";
-      // Try next song if this one is broken
-      // if (_currentIndex < _queue.length - 1) next(); 
     } finally {
       _isLoadingSong = false;
       notifyListeners();
