@@ -42,7 +42,7 @@ class MyApp extends StatelessWidget {
             end: Alignment.bottomCenter,
           ),
         ),
-        child: const HomeScreen(),
+        child: HomeScreen(),
       ),
     );
   }
