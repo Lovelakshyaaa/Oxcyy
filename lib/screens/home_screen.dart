@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:oxcy/providers/music_provider.dart'; 
-import 'player_screen.dart';
+import 'package:oxcy/providers/music_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -13,12 +12,16 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _controller = TextEditingController();
-  List<Song> _results = []; 
+  
+  // No local state needed for results anymore, the Provider manages it!
 
   @override
   Widget build(BuildContext context) {
     final musicProvider = Provider.of<MusicProvider>(context);
 
+    // If player is full screen, we hide the home screen content slightly to save resources
+    // but we keep it in the tree so it doesn't lose state.
+    
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Container(
@@ -31,7 +34,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: SafeArea(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.only(left: 20, top: 20),
+                child: Text("OXCY Music", style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+              
               // Search Bar
               Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -46,14 +56,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         controller: _controller,
                         style: GoogleFonts.poppins(color: Colors.white),
                         decoration: InputDecoration(
-                          hintText: "Search for a song...",
+                          hintText: "Search songs, artist...",
                           hintStyle: TextStyle(color: Colors.white54),
                           border: InputBorder.none,
                           icon: Icon(Icons.search, color: Colors.white54),
+                          suffixIcon: IconButton(
+                            icon: Icon(Icons.clear, color: Colors.white54),
+                            onPressed: () => _controller.clear(),
+                          ),
                         ),
                         onSubmitted: (val) async {
-                          _results = await musicProvider.search(val);
-                          setState(() {});
+                          if (val.trim().isEmpty) return;
+                          await musicProvider.search(val);
                         },
                       ),
                     ),
@@ -63,32 +77,41 @@ class _HomeScreenState extends State<HomeScreen> {
               
               // Results List
               Expanded(
-                child: musicProvider.isLoading 
-                  ? Center(child: CircularProgressIndicator(color: Colors.purpleAccent))
-                  : _results.isEmpty 
-                    ? Center(child: Text("Search to play music 🎵", style: GoogleFonts.poppins(color: Colors.white54)))
-                    : ListView.builder(
-                        itemCount: _results.length,
-                        itemBuilder: (context, index) {
-                          final song = _results[index];
-                          return ListTile(
-                            leading: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: CachedNetworkImage(
-                                imageUrl: song.thumbUrl,
-                                width: 50, height: 50, fit: BoxFit.cover,
-                                errorWidget: (context, url, error) => Icon(Icons.music_note, color: Colors.white),
-                              ),
-                            ),
-                            title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white)),
-                            subtitle: Text(song.artist, style: GoogleFonts.poppins(color: Colors.white70)),
-                            onTap: () {
-                              musicProvider.play(song);
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen()));
-                            },
-                          );
-                        },
+                child: musicProvider.queue.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.music_note_outlined, size: 60, color: Colors.white24),
+                          SizedBox(height: 10),
+                          Text("Search to start listening", style: TextStyle(color: Colors.white24)),
+                        ],
                       ),
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.only(bottom: 100), // Space for Mini Player
+                      itemCount: musicProvider.queue.length,
+                      itemBuilder: (context, index) {
+                        final song = musicProvider.queue[index];
+                        return ListTile(
+                          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CachedNetworkImage(
+                              imageUrl: song.thumbUrl,
+                              width: 50, height: 50, fit: BoxFit.cover,
+                            ),
+                          ),
+                          title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white)),
+                          subtitle: Text(song.artist, style: GoogleFonts.poppins(color: Colors.white70)),
+                          onTap: () {
+                            musicProvider.play(song);
+                            // NOTE: We do NOT use Navigator.push anymore.
+                            // The Provider handles the state, and the Stack in MainScaffold shows the player.
+                          },
+                        );
+                      },
+                    ),
               ),
             ],
           ),
