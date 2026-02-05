@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart'; // REQUIRED
 
 class Song {
   final String id;
@@ -15,12 +15,11 @@ class Song {
 }
 
 class MusicProvider with ChangeNotifier {
-  static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc"; // Your Key
+  static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
   final _yt = YoutubeExplode();
   final _player = AudioPlayer();
   
-  // Queue & State
   List<Song> _queue = [];
   int _currentIndex = -1;
   bool _isMiniPlayerVisible = false;
@@ -38,7 +37,6 @@ class MusicProvider with ChangeNotifier {
   List<Song> get queue => _queue;
 
   MusicProvider() {
-    // Listen for song completion to auto-play next
     _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         next();
@@ -60,7 +58,6 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> play(Song song) async {
-    // If clicking a new song, make it a playlist of 1 for now (or add logic to append)
     if (_queue.isEmpty || !_queue.contains(song)) {
       _queue = [song];
       _currentIndex = 0;
@@ -69,26 +66,24 @@ class MusicProvider with ChangeNotifier {
     }
 
     _isMiniPlayerVisible = true;
-    _isPlayerExpanded = true; // Auto-open full player on tap
+    _isPlayerExpanded = true;
     await _loadAndPlay();
   }
 
   Future<void> next() async {
     if (_queue.isEmpty) return;
-    
     if (_currentIndex < _queue.length - 1) {
       _currentIndex++;
     } else {
-      _currentIndex = 0; // Loop back to start of queue
+      _currentIndex = 0;
     }
     await _loadAndPlay();
   }
 
   Future<void> previous() async {
     if (_queue.isEmpty) return;
-    
     if (_player.position.inSeconds > 3) {
-      _player.seek(Duration.zero); // Restart song if > 3s in
+      _player.seek(Duration.zero);
     } else if (_currentIndex > 0) {
       _currentIndex--;
       await _loadAndPlay();
@@ -100,7 +95,6 @@ class MusicProvider with ChangeNotifier {
     if (_isShuffling) {
       _queue.shuffle();
     }
-    // (In a real app, you'd want to keep the current song playing)
     notifyListeners();
   }
 
@@ -122,14 +116,29 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     try {
       final song = _queue[_currentIndex];
+      
+      // Get Audio URL
       var manifest = await _yt.videos.streamsClient.getManifest(song.id);
       var audioUrl = manifest.audioOnly.withHighestBitrate().url;
       
-      await _player.setUrl(audioUrl.toString());
+      // BACKGROUND SOURCE SETUP
+      final source = AudioSource.uri(
+        audioUrl,
+        tag: MediaItem(
+          id: song.id,
+          album: "OXCY Music",
+          title: song.title,
+          artist: song.artist,
+          artUri: Uri.parse(song.thumbUrl),
+        ),
+      );
+      
+      await _player.setAudioSource(source);
       _player.play();
     } catch (e) {
-      print("Audio Error: $e");
-      next(); // Skip if error
+      print("Error playing audio: $e");
+      // Stop the player so it doesn't loop infinitely
+      _player.stop(); 
     }
   }
 
@@ -138,13 +147,14 @@ class MusicProvider with ChangeNotifier {
     else _player.play();
   }
 
-  // --- SEARCH (Updated for 30 results) ---
+  // --- SEARCH FIX ---
   
   Future<List<Song>> search(String query) async {
     notifyListeners();
     try {
+      // ADDED: videoCategoryId=10 (Music) to filter trash
       final url = Uri.parse(
-        'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$query&type=video&maxResults=30&key=$_apiKey'
+        'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$query&type=video&videoCategoryId=10&maxResults=30&key=$_apiKey'
       );
       final response = await http.get(url);
       
@@ -165,9 +175,7 @@ class MusicProvider with ChangeNotifier {
           );
         }).toList();
         
-        // Auto-fill queue with results so "Next" button works
-        _queue = results;
-        
+        _queue = results; // Update queue context
         notifyListeners();
         return results;
       }
