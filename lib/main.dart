@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:myapp/providers/music_provider.dart';
-import 'package:myapp/screens/home_screen.dart';
+import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/screens/home_screen.dart';
 
 void main() {
   runApp(
