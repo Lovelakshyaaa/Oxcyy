@@ -1,3 +1,4 @@
+import 'dart:async'; // Needed for timeout
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,11 +10,17 @@ import 'package:oxcy/screens/player_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
-    androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: true,
-  );
+  // SAFETY CHECK: Try to start audio service, but give up after 3 seconds
+  // so the app doesn't freeze on the splash screen.
+  try {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+      androidNotificationChannelName: 'Audio playback',
+      androidNotificationOngoing: true,
+    ).timeout(const Duration(seconds: 3));
+  } catch (e) {
+    print("Audio Init Failed or Timed Out: $e");
+  }
   
   runApp(
     MultiProvider(
