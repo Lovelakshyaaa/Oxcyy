@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import '../clients.dart'; // IMPORT THE NEW CLIENTS FILE
 
 class Song {
   final String id;
@@ -27,6 +28,9 @@ class MusicProvider with ChangeNotifier {
   final _yt = YoutubeExplode();
   final _player = AudioPlayer();
   
+  // The Secret Weapon: Musify's Custom Clients
+  final List<YoutubeApiClient> _clients = [customAndroidVr, customAndroidSdkless];
+
   List<Song> _searchResults = []; 
   List<Song> _queue = [];         
   int _currentIndex = -1;
@@ -199,13 +203,15 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // 1. Get Manifest
-      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
+      // --- THE MUSIFY FIX ---
+      // We pass 'ytClients' to tell YouTube we are an Android VR headset.
+      var manifest = await _yt.videos.streamsClient.getManifest(
+        song.id, 
+        ytClients: _clients // <--- THIS IS THE KEY!
+      );
       
-      // 2. COLLISION FIX: Use the built-in helper instead of "Container.mp4"
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
-      // 3. Setup Source 
       final source = AudioSource.uri(
         audioStream.url,
         tag: MediaItem(
@@ -222,7 +228,7 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
-      _errorMessage = "Failed to play: ${e.toString().split(':').first}";
+      _errorMessage = "Playback Error: $e";
     } finally {
       _isLoadingSong = false;
       notifyListeners();
