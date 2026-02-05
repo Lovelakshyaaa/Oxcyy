@@ -5,13 +5,12 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// Enhanced Model
 class Song {
   final String id;
   final String title;
   final String artist;
   final String thumbUrl;
-  final String type; // 'video' or 'playlist'
+  final String type;
 
   Song({
     required this.id, 
@@ -28,23 +27,23 @@ class MusicProvider with ChangeNotifier {
   final _yt = YoutubeExplode();
   final _player = AudioPlayer();
   
-  // State
   List<Song> _searchResults = []; 
   List<Song> _queue = [];         
   int _currentIndex = -1;
   
-  // Pagination State
   String? _nextPageToken;
   String _currentQuery = "";
   bool _isFetchingMore = false;
   
-  // UI State
+  // PLAYBACK STATE
+  bool _isLoadingSong = false;
+  String? _errorMessage;
+  
   bool _isMiniPlayerVisible = false;
   bool _isPlayerExpanded = false;
   bool _isShuffling = false;
   LoopMode _loopMode = LoopMode.off;
 
-  // Getters
   AudioPlayer get player => _player;
   List<Song> get searchResults => _searchResults;
   List<Song> get queue => _queue;
@@ -54,6 +53,8 @@ class MusicProvider with ChangeNotifier {
   bool get isShuffling => _isShuffling;
   LoopMode get loopMode => _loopMode;
   bool get isFetchingMore => _isFetchingMore;
+  bool get isLoadingSong => _isLoadingSong;
+  String? get errorMessage => _errorMessage;
 
   MusicProvider() {
     _player.playerStateStream.listen((state) {
@@ -64,14 +65,12 @@ class MusicProvider with ChangeNotifier {
     });
   }
 
-  // --- SEARCH & INFINITE SCROLL ---
-
+  // --- SEARCH ---
   Future<void> search(String query) async {
     _currentQuery = query;
     _searchResults = [];
     _nextPageToken = null;
     notifyListeners();
-    
     await _fetchPage();
   }
 
@@ -79,9 +78,7 @@ class MusicProvider with ChangeNotifier {
     if (_isFetchingMore || _nextPageToken == null) return;
     _isFetchingMore = true;
     notifyListeners();
-    
     await _fetchPage();
-    
     _isFetchingMore = false;
     notifyListeners();
   }
@@ -89,9 +86,7 @@ class MusicProvider with ChangeNotifier {
   Future<void> _fetchPage() async {
     try {
       String url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$_currentQuery&type=video,playlist&maxResults=20&key=$_apiKey';
-      if (_nextPageToken != null) {
-        url += "&pageToken=$_nextPageToken";
-      }
+      if (_nextPageToken != null) url += "&pageToken=$_nextPageToken";
 
       final response = await http.get(Uri.parse(url));
       
@@ -125,17 +120,24 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // --- PLAYBACK LOGIC ---
+  // --- PLAYBACK ---
 
   Future<void> play(Song song) async {
+    await _player.stop();
     _queue = [song];
     _currentIndex = 0;
     _isMiniPlayerVisible = true;
     _isPlayerExpanded = true;
+    _errorMessage = null; 
     await _loadAndPlay();
   }
 
   Future<void> playPlaylist(Song album) async {
+    await _player.stop();
+    _isMiniPlayerVisible = true;
+    _isLoadingSong = true; 
+    notifyListeners();
+    
     try {
       var playlist = await _yt.playlists.get(album.id);
       var videos = _yt.playlists.getVideos(playlist.id);
@@ -155,18 +157,22 @@ class MusicProvider with ChangeNotifier {
       if (albumSongs.isNotEmpty) {
         _queue = albumSongs;
         _currentIndex = 0;
-        _isMiniPlayerVisible = true;
         _isPlayerExpanded = true;
         await _loadAndPlay();
+      } else {
+        _isLoadingSong = false;
+        notifyListeners();
       }
-      
     } catch (e) {
-      print("Playlist Error: $e");
+      _isLoadingSong = false;
+      _errorMessage = "Could not load album: $e";
+      notifyListeners();
     }
   }
 
   Future<void> next() async {
     if (_queue.isEmpty) return;
+    await _player.stop();
     if (_currentIndex < _queue.length - 1) {
       _currentIndex++;
     } else {
@@ -180,20 +186,31 @@ class MusicProvider with ChangeNotifier {
     if (_player.position.inSeconds > 3) {
       _player.seek(Duration.zero);
     } else if (_currentIndex > 0) {
+      await _player.stop();
       _currentIndex--;
       await _loadAndPlay();
     }
   }
 
   Future<void> _loadAndPlay() async {
+    _isLoadingSong = true;
     notifyListeners();
+    
     try {
       final song = _queue[_currentIndex];
-      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
-      var audioUrl = manifest.audioOnly.withHighestBitrate().url;
       
+      // 1. Get Manifest
+      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
+      
+      // 2. CRITICAL: Select M4A (Most compatible)
+      var audioStream = manifest.audioOnly.firstWhere(
+        (s) => s.container == Container.mp4, 
+        orElse: () => manifest.audioOnly.withHighestBitrate()
+      );
+      
+      // 3. Setup Source 
       final source = AudioSource.uri(
-        audioUrl,
+        audioStream.url,
         tag: MediaItem(
           id: song.id,
           album: "OXCY Music",
@@ -205,9 +222,15 @@ class MusicProvider with ChangeNotifier {
       
       await _player.setAudioSource(source);
       _player.play();
+      
     } catch (e) {
       print("Audio Error: $e");
-      _player.stop();
+      _errorMessage = "Failed to play: ${e.toString().split(':').first}";
+      // Try next song if this one is broken
+      // if (_currentIndex < _queue.length - 1) next(); 
+    } finally {
+      _isLoadingSong = false;
+      notifyListeners();
     }
   }
   
@@ -227,4 +250,6 @@ class MusicProvider with ChangeNotifier {
     else { _loopMode = LoopMode.off; await _player.setLoopMode(LoopMode.off); }
     notifyListeners();
   }
+  
+  void clearError() { _errorMessage = null; notifyListeners(); }
 }
