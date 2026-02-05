@@ -1,0 +1,47 @@
+name: Build APK
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the code
+      - uses: actions/checkout@v4
+
+      # 2. Set up Java 17 (Required for modern Android builds)
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      # 3. Set up Flutter (Latest Stable Version)
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      # 4. Clean previous builds (Prevents "junk" errors)
+      - run: flutter clean
+
+      # 5. Get Dependencies
+      - run: flutter pub get
+
+      # 6. Build the APK
+      # --no-tree-shake-icons: Prevents font icon errors
+      # --release: Optimizes the app for speed
+      - run: flutter build apk --release --no-tree-shake-icons
+
+      # 7. Upload the APK so you can download it
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oxcy-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          compression-level: 0 # Faster upload
