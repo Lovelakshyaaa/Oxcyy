@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import '../clients.dart'; // IMPORT THE NEW CLIENTS FILE
+import '../clients.dart'; // Ensure this points to your clients.dart file
 
 class Song {
   final String id;
@@ -26,9 +26,21 @@ class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
   final _yt = YoutubeExplode();
-  final _player = AudioPlayer();
   
-  // The Secret Weapon: Musify's Custom Clients
+  // 1. MUSIFY'S PLAYER CONFIGURATION
+  // This is the "Engine Tuning" we were missing. 
+  // It forces the player to accept streams faster (500ms buffer).
+  final _player = AudioPlayer(
+    audioLoadConfiguration: const AudioLoadConfiguration(
+      androidLoadControl: AndroidLoadControl(
+        maxBufferDuration: Duration(seconds: 60),
+        bufferForPlaybackDuration: Duration(milliseconds: 500),
+        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
+      ),
+    ),
+  );
+  
+  // 2. MUSIFY'S CLIENT LIST
   final List<YoutubeApiClient> _clients = [customAndroidVr, customAndroidSdkless];
 
   List<Song> _searchResults = []; 
@@ -39,7 +51,6 @@ class MusicProvider with ChangeNotifier {
   String _currentQuery = "";
   bool _isFetchingMore = false;
   
-  // PLAYBACK STATE
   bool _isLoadingSong = false;
   String? _errorMessage;
   
@@ -61,6 +72,14 @@ class MusicProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   MusicProvider() {
+    // 3. SET ANDROID ATTRIBUTES (Musify does this to keep background audio alive)
+    _player.setAndroidAudioAttributes(
+      const AndroidAudioAttributes(
+        contentType: AndroidAudioContentType.music,
+        usage: AndroidAudioUsage.media,
+      ),
+    );
+
     _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         next();
@@ -203,11 +222,10 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // --- THE MUSIFY FIX ---
-      // We pass 'ytClients' to tell YouTube we are an Android VR headset.
+      // 4. USE FAKE CLIENTS TO GET MANIFEST
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
-        ytClients: _clients // <--- THIS IS THE KEY!
+        ytClients: _clients 
       );
       
       var audioStream = manifest.audioOnly.withHighestBitrate();
@@ -228,7 +246,7 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
-      _errorMessage = "Playback Error: $e";
+      _errorMessage = "Playback Error: ${e.toString().split(':').first}";
     } finally {
       _isLoadingSong = false;
       notifyListeners();
@@ -238,19 +256,12 @@ class MusicProvider with ChangeNotifier {
   void togglePlayerView() { _isPlayerExpanded = !_isPlayerExpanded; notifyListeners(); }
   void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
   void togglePlayPause() { if (_player.playing) _player.pause(); else _player.play(); }
-  
-  Future<void> toggleShuffle() async {
-    _isShuffling = !_isShuffling;
-    if (_isShuffling) _queue.shuffle();
-    notifyListeners();
-  }
-
-  Future<void> toggleLoop() async {
+  void toggleShuffle() { _isShuffling = !_isShuffling; if (_isShuffling) _queue.shuffle(); notifyListeners(); }
+  void toggleLoop() async {
     if (_loopMode == LoopMode.off) { _loopMode = LoopMode.one; await _player.setLoopMode(LoopMode.one); }
     else if (_loopMode == LoopMode.one) { _loopMode = LoopMode.all; await _player.setLoopMode(LoopMode.all); }
     else { _loopMode = LoopMode.off; await _player.setLoopMode(LoopMode.off); }
     notifyListeners();
   }
-  
   void clearError() { _errorMessage = null; notifyListeners(); }
 }
