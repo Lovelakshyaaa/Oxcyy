@@ -12,9 +12,18 @@ class SmartPlayer extends StatelessWidget {
     final provider = Provider.of<MusicProvider>(context);
     final song = provider.currentSong;
 
+    // ERROR LISTENER
+    if (provider.errorMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(provider.errorMessage!), backgroundColor: Colors.red),
+        );
+        provider.clearError();
+      });
+    }
+
     if (song == null || !provider.isMiniPlayerVisible) return SizedBox.shrink();
 
-    // Calculate Height based on state
     final double screenHeight = MediaQuery.of(context).size.height;
     final double height = provider.isPlayerExpanded ? screenHeight : 70.0;
 
@@ -23,7 +32,7 @@ class SmartPlayer extends StatelessWidget {
       curve: Curves.easeInOut,
       height: height,
       decoration: BoxDecoration(
-        color: Color(0xFF1A1A2E), // Deep dark blue
+        color: Color(0xFF1A1A2E), 
         borderRadius: provider.isPlayerExpanded 
             ? BorderRadius.zero 
             : BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
@@ -31,10 +40,7 @@ class SmartPlayer extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // FULL SCREEN CONTENT
           if (provider.isPlayerExpanded) _buildFullScreen(context, provider, song),
-          
-          // MINI PLAYER CONTENT (Only show if NOT expanded)
           if (!provider.isPlayerExpanded) _buildMiniPlayer(context, provider, song),
         ],
       ),
@@ -43,7 +49,7 @@ class SmartPlayer extends StatelessWidget {
 
   Widget _buildMiniPlayer(BuildContext context, MusicProvider provider, Song song) {
     return GestureDetector(
-      onTap: provider.togglePlayerView, // Tap to expand
+      onTap: provider.togglePlayerView, 
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
@@ -52,13 +58,11 @@ class SmartPlayer extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Tiny Art
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: CachedNetworkImage(imageUrl: song.thumbUrl, width: 45, height: 45, fit: BoxFit.cover),
             ),
             SizedBox(width: 12),
-            // Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -69,11 +73,13 @@ class SmartPlayer extends StatelessWidget {
                 ],
               ),
             ),
-            // Controls
-            IconButton(
-              icon: Icon(provider.player.playing ? Icons.pause : Icons.play_arrow, color: Colors.white),
-              onPressed: provider.togglePlayPause,
-            ),
+            // Loading Spinner or Play Button
+            provider.isLoadingSong 
+              ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : IconButton(
+                  icon: Icon(provider.player.playing ? Icons.pause : Icons.play_arrow, color: Colors.white),
+                  onPressed: provider.togglePlayPause,
+                ),
           ],
         ),
       ),
@@ -85,11 +91,7 @@ class SmartPlayer extends StatelessWidget {
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Background Art
-          Positioned.fill(
-             child: CachedNetworkImage(imageUrl: song.thumbUrl, fit: BoxFit.cover),
-          ),
-          // Blur Overlay
+          Positioned.fill(child: CachedNetworkImage(imageUrl: song.thumbUrl, fit: BoxFit.cover)),
           Positioned.fill(
              child: BackdropFilter(
                filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
@@ -97,21 +99,18 @@ class SmartPlayer extends StatelessWidget {
              ),
           ),
           
-          // Main UI
           SafeArea(
             child: Column(
               children: [
-                // Top Bar (Down Arrow)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: IconButton(
                     icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30),
-                    onPressed: provider.collapsePlayer, // Minimize, don't close
+                    onPressed: provider.collapsePlayer, 
                   ),
                 ),
                 Spacer(),
                 
-                // Big Art
                 Container(
                   width: 300, height: 300,
                   decoration: BoxDecoration(
@@ -126,7 +125,6 @@ class SmartPlayer extends StatelessWidget {
                 
                 SizedBox(height: 30),
                 
-                // Title
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
@@ -139,7 +137,6 @@ class SmartPlayer extends StatelessWidget {
                 
                 SizedBox(height: 30),
                 
-                // Progress Bar (StreamBuilder)
                 StreamBuilder<Duration>(
                   stream: provider.player.positionStream,
                   builder: (context, snapshot) {
@@ -151,7 +148,7 @@ class SmartPlayer extends StatelessWidget {
                         children: [
                           Slider(
                             value: position.inSeconds.toDouble().clamp(0, total.inSeconds.toDouble()),
-                            max: total.inSeconds.toDouble(),
+                            max: total.inSeconds.toDouble() > 0 ? total.inSeconds.toDouble() : 1, 
                             activeColor: Colors.purpleAccent,
                             onChanged: (val) => provider.player.seek(Duration(seconds: val.toInt())),
                           ),
@@ -161,7 +158,9 @@ class SmartPlayer extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(_formatDuration(position), style: TextStyle(color: Colors.white54)),
-                                Text(_formatDuration(total), style: TextStyle(color: Colors.white54)),
+                                total.inSeconds == 0 
+                                  ? SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1, color: Colors.white)) 
+                                  : Text(_formatDuration(total), style: TextStyle(color: Colors.white54)),
                               ],
                             ),
                           ),
@@ -171,7 +170,6 @@ class SmartPlayer extends StatelessWidget {
                   },
                 ),
                 
-                // Controls
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -180,14 +178,19 @@ class SmartPlayer extends StatelessWidget {
                        onPressed: provider.toggleShuffle,
                     ),
                     IconButton(icon: Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: provider.previous),
+                    
+                    // PLAY BUTTON WITH LOADER
                     Container(
                       decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                      child: IconButton(
-                        iconSize: 50,
-                        icon: Icon(provider.player.playing ? Icons.pause : Icons.play_arrow, color: Colors.black),
-                        onPressed: provider.togglePlayPause,
-                      ),
+                      child: provider.isLoadingSong 
+                        ? Padding(padding: EdgeInsets.all(15), child: CircularProgressIndicator(color: Colors.black))
+                        : IconButton(
+                            iconSize: 50,
+                            icon: Icon(provider.player.playing ? Icons.pause : Icons.play_arrow, color: Colors.black),
+                            onPressed: provider.togglePlayPause,
+                          ),
                     ),
+                    
                     IconButton(icon: Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: provider.next),
                     IconButton(
                        icon: Icon(
