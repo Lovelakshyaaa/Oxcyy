@@ -24,10 +24,11 @@ tasks.register<Delete>("clean") {
 }
 
 // -----------------------------------------------------------
-// 🧙‍♀️ HIMMY'S COMBINED FIXER (Namespace + Java 17)
+// 🧙‍♀️ HIMMY'S FINAL FIXER (Crash-Proof Edition)
 // -----------------------------------------------------------
 subprojects {
-    // 1. AMBUSH: Inject Namespace when plugin loads (Fixes AGP 8.0 error)
+    // 1. NAMESPACE AMBUSH (This part was working perfectly!)
+    // It listens for the Android plugin and injects the ID instantly.
     pluginManager.withPlugin("com.android.library") {
         val android = extensions.findByName("android")
         if (android != null) {
@@ -42,19 +43,19 @@ subprojects {
         }
     }
 
-    // 2. ENFORCER: Force everyone to use Java 17 (Fixes JVM Mismatch)
-    // This overrides the "1.8" setting in old plugins
-    afterEvaluate {
-        tasks.withType<JavaCompile> {
-            sourceCompatibility = "17"
-            targetCompatibility = "17"
-        }
-        
-        // Force Kotlin to match Java 17
-        tasks.withType<KotlinCompile>().configureEach {
-            kotlinOptions {
-                jvmTarget = "17"
-            }
+    // 2. JAVA 17 ENFORCER (Lazy Mode - No 'afterEvaluate')
+    // We use 'configureEach' which waits for tasks safely without crashing.
+    
+    // Force Java Compilation to Version 17
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
+    }
+
+    // Force Kotlin Compilation to Version 17
+    tasks.withType<KotlinCompile>().configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
         }
     }
 }
