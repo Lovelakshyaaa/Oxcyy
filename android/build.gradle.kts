@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.gradle.api.JavaVersion
 
 allprojects {
     repositories {
@@ -24,11 +25,10 @@ tasks.register<Delete>("clean") {
 }
 
 // -----------------------------------------------------------
-// 🧙‍♀️ HIMMY'S FINAL FIXER (Crash-Proof Edition)
+// 🧙‍♀️ HIMMY'S GOD-MODE FIXER
 // -----------------------------------------------------------
 subprojects {
-    // 1. NAMESPACE AMBUSH (This part was working perfectly!)
-    // It listens for the Android plugin and injects the ID instantly.
+    // 1. NAMESPACE AMBUSH (Keep this, it is working!)
     pluginManager.withPlugin("com.android.library") {
         val android = extensions.findByName("android")
         if (android != null) {
@@ -38,24 +38,45 @@ subprojects {
                 setNamespace.invoke(android, safeName)
                 println("✅ Pre-injected namespace for: ${project.name}")
             } catch (e: Exception) {
-                // Ignore harmless errors
+                // Ignore
             }
         }
     }
 
-    // 2. JAVA 17 ENFORCER (Lazy Mode - No 'afterEvaluate')
-    // We use 'configureEach' which waits for tasks safely without crashing.
-    
-    // Force Java Compilation to Version 17
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
-    }
+    // 2. JAVA 17 OVERRIDE (The Fix for 'Inconsistent JVM-target')
+    // We use afterEvaluate at the TOP LEVEL (Safe) to overwrite the plugin's 1.8 setting.
+    afterEvaluate {
+        // A. Force the Android Plugin's internal settings to Java 17
+        val android = extensions.findByName("android")
+        if (android != null) {
+            try {
+                // Access 'compileOptions' via reflection to avoid import errors
+                val getCompileOptions = android.javaClass.getMethod("getCompileOptions")
+                val compileOptions = getCompileOptions.invoke(android)
+                
+                // Force Source and Target to Java 17
+                val setSource = compileOptions.javaClass.getMethod("setSourceCompatibility", JavaVersion::class.java)
+                val setTarget = compileOptions.javaClass.getMethod("setTargetCompatibility", JavaVersion::class.java)
+                
+                setSource.invoke(compileOptions, JavaVersion.VERSION_17)
+                setTarget.invoke(compileOptions, JavaVersion.VERSION_17)
+                println("☕ Forced Java 17 for: ${project.name}")
+            } catch (e: Exception) {
+                // If this fails, the task loop below is our backup
+            }
+        }
 
-    // Force Kotlin Compilation to Version 17
-    tasks.withType<KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = "17"
+        // B. Force all Java Compilation Tasks to 17
+        tasks.withType<JavaCompile>().configureEach {
+            sourceCompatibility = "17"
+            targetCompatibility = "17"
+        }
+
+        // C. Force all Kotlin Compilation Tasks to 17
+        tasks.withType<KotlinCompile>().configureEach {
+            kotlinOptions {
+                jvmTarget = "17"
+            }
         }
     }
 }
