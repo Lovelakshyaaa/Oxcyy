@@ -5,8 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import '../clients.dart'; // Ensure this file exists in lib/clients.dart
 
+// --- DATA MODEL ---
 class Song {
   final String id;
   final String title;
@@ -23,25 +23,16 @@ class Song {
   });
 }
 
+// --- PROVIDER ---
 class MusicProvider with ChangeNotifier {
+  // ⚠️ WARNING: Keep your API Key secret in production!
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
   final _yt = YoutubeExplode();
   
-  // FIXED: Removed 'const' to prevent "Not a constant expression" errors
-  final _player = AudioPlayer(
-    audioLoadConfiguration: AudioLoadConfiguration(
-      androidLoadControl: AndroidLoadControl(
-        maxBufferDuration: const Duration(seconds: 60),
-        bufferForPlaybackDuration: const Duration(milliseconds: 500),
-        bufferForPlaybackAfterRebufferDuration: const Duration(seconds: 3),
-      ),
-    ),
-  );
+  // FIXED: Standard initialization (removed complex load control for stability)
+  final _player = AudioPlayer();
   
-  // The Secret Musify Clients
-  final List<YoutubeApiClient> _clients = [customAndroidVr, customAndroidSdkless];
-
   List<Song> _searchResults = []; 
   List<Song> _queue = [];         
   int _currentIndex = -1;
@@ -58,6 +49,7 @@ class MusicProvider with ChangeNotifier {
   bool _isShuffling = false;
   LoopMode _loopMode = LoopMode.off;
 
+  // Getters
   AudioPlayer get player => _player;
   List<Song> get searchResults => _searchResults;
   List<Song> get queue => _queue;
@@ -71,14 +63,9 @@ class MusicProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   MusicProvider() {
-    // FIXED: Removed 'const' here as well
-    _player.setAndroidAudioAttributes(
-      AndroidAudioAttributes(
-        contentType: AndroidAudioContentType.music,
-        usage: AndroidAudioUsage.media,
-      ),
-    );
-
+    _initAudioSession();
+    
+    // Listen for song completion to auto-play next
     _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         next();
@@ -87,7 +74,19 @@ class MusicProvider with ChangeNotifier {
     });
   }
 
-  // --- SEARCH ---
+  Future<void> _initAudioSession() async {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+    // This fixes the "AndroidAudioAttributes" error internally
+    _player.setAndroidAudioAttributes(
+      const AndroidAudioAttributes(
+        contentType: AndroidAudioContentType.music,
+        usage: AndroidAudioUsage.media,
+      ),
+    );
+  }
+
+  // --- SEARCH (YouTube Data API) ---
   Future<void> search(String query) async {
     _currentQuery = query;
     _searchResults = [];
@@ -114,12 +113,14 @@ class MusicProvider with ChangeNotifier {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        // Safely handle if nextPageToken is missing
         _nextPageToken = data['nextPageToken']; 
         List<dynamic> items = data['items'];
         
         List<Song> newResults = items.map((item) {
            var thumbs = item['snippet']['thumbnails'];
            String img = thumbs['high']['url'];
+           // Safety check for maxres
            if (thumbs.containsKey('maxres')) img = thumbs['maxres']['url'];
 
            String id = item['id']['videoId'] ?? item['id']['playlistId'];
@@ -136,13 +137,15 @@ class MusicProvider with ChangeNotifier {
         
         _searchResults.addAll(newResults);
         notifyListeners();
+      } else {
+        print("API Error: ${response.body}");
       }
     } catch (e) {
-      print("API Error: $e");
+      print("Network Error: $e");
     }
   }
 
-  // --- PLAYBACK ---
+  // --- PLAYBACK ENGINE ---
 
   Future<void> play(Song song) async {
     await _player.stop();
@@ -173,7 +176,7 @@ class MusicProvider with ChangeNotifier {
           thumbUrl: video.thumbnails.highResUrl,
           type: 'video',
         ));
-        if (albumSongs.length >= 50) break;
+        if (albumSongs.length >= 50) break; // Limit to 50 for performance
       }
 
       if (albumSongs.isNotEmpty) {
@@ -194,11 +197,11 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> next() async {
     if (_queue.isEmpty) return;
-    await _player.stop();
+    // await _player.stop(); // Optional: smoother transition if removed
     if (_currentIndex < _queue.length - 1) {
       _currentIndex++;
     } else {
-      _currentIndex = 0;
+      _currentIndex = 0; // Loop back to start
     }
     await _loadAndPlay();
   }
@@ -208,7 +211,7 @@ class MusicProvider with ChangeNotifier {
     if (_player.position.inSeconds > 3) {
       _player.seek(Duration.zero);
     } else if (_currentIndex > 0) {
-      await _player.stop();
+      // await _player.stop();
       _currentIndex--;
       await _loadAndPlay();
     }
@@ -221,12 +224,11 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // CRITICAL: Using Musify's Client Identity (VR Headset)
-      var manifest = await _yt.videos.streamsClient.getManifest(
-        song.id, 
-        ytClients: _clients 
-      );
+      // FIXED: Use standard manifest fetching
+      // The 'ytClients' parameter does NOT exist in standard version 3.0.5
+      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
       
+      // Get the best audio-only stream (m4a)
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
       final source = AudioSource.uri(
@@ -245,22 +247,34 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
-      _errorMessage = "Playback Error: ${e.toString().split(':').first}";
+      _errorMessage = "Playback Error. Song might be restricted.";
+      // Auto-skip on error (optional)
+      // next(); 
     } finally {
       _isLoadingSong = false;
       notifyListeners();
     }
   }
   
+  // --- CONTROLS ---
   void togglePlayerView() { _isPlayerExpanded = !_isPlayerExpanded; notifyListeners(); }
   void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
   void togglePlayPause() { if (_player.playing) _player.pause(); else _player.play(); }
   void toggleShuffle() { _isShuffling = !_isShuffling; if (_isShuffling) _queue.shuffle(); notifyListeners(); }
+  
   void toggleLoop() async {
-    if (_loopMode == LoopMode.off) { _loopMode = LoopMode.one; await _player.setLoopMode(LoopMode.one); }
-    else if (_loopMode == LoopMode.one) { _loopMode = LoopMode.all; await _player.setLoopMode(LoopMode.all); }
-    else { _loopMode = LoopMode.off; await _player.setLoopMode(LoopMode.off); }
+    if (_loopMode == LoopMode.off) { 
+        _loopMode = LoopMode.one; 
+        await _player.setLoopMode(LoopMode.one); 
+    } else if (_loopMode == LoopMode.one) { 
+        _loopMode = LoopMode.all; 
+        await _player.setLoopMode(LoopMode.all); 
+    } else { 
+        _loopMode = LoopMode.off; 
+        await _player.setLoopMode(LoopMode.off); 
+    }
     notifyListeners();
   }
+  
   void clearError() { _errorMessage = null; notifyListeners(); }
 }
