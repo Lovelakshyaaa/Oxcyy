@@ -2,14 +2,13 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+
     <application
         android:label="Oxcy"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        android:usesCleartextTraffic="true">
-        
-        <activity
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"> <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
@@ -33,7 +32,7 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <service android:name="com.ryanheise.audio_service.AudioService"
+        <service android:name="com.ryanheise.just_audio_background.AudioService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">
             <intent-filter>
@@ -41,13 +40,14 @@
             </intent-filter>
         </service>
 
-        <receiver android:name="com.ryanheise.audio_service.MediaButtonReceiver"
+        <receiver android:name="com.ryanheise.just_audio_background.MediaButtonReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver> 
-        </application>
+        
+    </application>
 
     <queries>
         <intent>
