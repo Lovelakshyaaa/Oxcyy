@@ -7,17 +7,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
       # ---------------------------------------------------
-      # THE FIX: Now deletes android/app/build.gradle.kts too
+      # STEP 1: GENERATE MISSING BINARIES (The Missing Link)
       # ---------------------------------------------------
-      - name: 🔧 TOTAL WIPEOUT & REBUILD
+      - name: 🏗️ Scaffold Android Wrapper
         run: |
-          echo "🔥 DESTROYING ALL KOTLIN BUILD FILES..."
+          flutter config --no-analytics
+          # This command generates the missing 'gradlew' and 'gradle-wrapper.jar'
+          flutter create --platforms=android . 
+
+      # ---------------------------------------------------
+      # STEP 2: TOTAL WIPEOUT & DOWNGRADE (The Fix)
+      # ---------------------------------------------------
+      - name: 🔧 FORCE DOWNGRADE TO GRADLE 7
+        run: |
+          echo "🔥 DESTROYING generated .kts files..."
           rm -f android/settings.gradle.kts
           rm -f android/build.gradle.kts
-          rm -f android/app/build.gradle.kts  # <--- THIS WAS THE CULPRIT!
+          rm -f android/app/build.gradle.kts
 
-          echo "🛠️ CREATING android/settings.gradle..."
+          echo "🛠️ CREATING Safe Settings (Groovy)..."
           echo 'pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
@@ -45,7 +64,7 @@ jobs:
           }
           include ":app"' > android/settings.gradle
 
-          echo "🛠️ CREATING android/build.gradle (Project)..."
+          echo "🛠️ CREATING Safe Project Build (Groovy)..."
           echo 'allprojects {
               repositories {
                   google()
@@ -63,7 +82,7 @@ jobs:
               delete rootProject.buildDir
           }' > android/build.gradle
 
-          echo "🛠️ CREATING android/app/build.gradle (App - CRITICAL)..."
+          echo "🛠️ CREATING Safe App Build (Groovy)..."
           echo 'def localProperties = new Properties()
           def localPropertiesFile = rootProject.file("local.properties")
           if (localPropertiesFile.exists()) {
@@ -73,19 +92,14 @@ jobs:
           if (flutterRoot == null) {
               flutterRoot = System.getenv("FLUTTER_ROOT")
           }
-          def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
-          if (flutterVersionCode == null) { flutterVersionCode = "1" }
-          def flutterVersionName = localProperties.getProperty("flutter.versionName")
-          if (flutterVersionName == null) { flutterVersionName = "1.0" }
-
+          
           apply plugin: "com.android.application"
           apply plugin: "kotlin-android"
           apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
           android {
               compileSdkVersion 33
-              ndkVersion flutter.ndkVersion
-
+              namespace "com.example.oxcy" 
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
                   targetCompatibility JavaVersion.VERSION_1_8
@@ -97,11 +111,11 @@ jobs:
                   main.java.srcDirs += "src/main/kotlin"
               }
               defaultConfig {
-                  applicationId "com.example.oxcy" 
-                  minSdkVersion 23 
+                  applicationId "com.example.oxcy"
+                  minSdkVersion 23
                   targetSdkVersion 33
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
+                  versionCode 1
+                  versionName "1.0"
               }
               buildTypes {
                   release {
@@ -116,23 +130,19 @@ jobs:
               implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.10"
           }' > android/app/build.gradle
 
-          echo "🛠️ DOWNGRADING Wrapper to 7.6.1..."
+          echo "🛠️ FORCING Wrapper to 7.6.1..."
           echo 'distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.1-all.zip' > android/gradle/wrapper/gradle-wrapper.properties
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-          cache: 'gradle'
+          echo "🛠️ FIXING Permissions..."
+          chmod +x android/gradlew
 
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
+      # ---------------------------------------------------
+      # STEP 3: BUILD
+      # ---------------------------------------------------
       - run: flutter pub get
       - run: flutter build apk --release --no-tree-shake-icons
 
