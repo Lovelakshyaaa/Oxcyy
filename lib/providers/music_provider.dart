@@ -215,14 +215,17 @@ class MusicProvider with ChangeNotifier {
       final song = _queue[_currentIndex];
       
       // STEP 2: Inject the Custom VR Client HERE
-      // This bypasses the restriction without breaking the build constructor.
+      // This allows us to use standard init for building, but VR power for streaming.
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
         ytClients: [customAndroidVr] // <--- THIS IS THE MAGIC KEY 🔑
       );
       
+      // FIX 3: THE STRING CHECK
+      // Instead of looking for "yt.Container" (which doesn't exist), 
+      // we just check if the container name is "mp4".
       var audioStream = manifest.audioOnly
-          .where((s) => s.container == yt.Container.mp4)
+          .where((s) => s.container.name.toString() == 'mp4') 
           .withHighestBitrate();
       
       final source = AudioSource.uri(
