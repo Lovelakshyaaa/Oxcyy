@@ -6,7 +6,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// Import your custom clients
+// Import kept to prevent build errors, but we won't use the client for now.
 import 'package:oxcy/clients.dart'; 
 
 class Song {
@@ -28,7 +28,7 @@ class Song {
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // Standard Init (Works for build)
+  // 1. Standard Init
   final _yt = yt.YoutubeExplode();
   
   final _player = AudioPlayer();
@@ -212,22 +212,22 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // 1. Get Manifest using the VR Client (Correct)
-      var manifest = await _yt.videos.streamsClient.getManifest(
-        song.id, 
-        ytClients: [customAndroidVr]
-      );
+      // FIX 1: Remove 'ytClients'. Let the library use its Default Client.
+      // The Default Client is more reliable for Official Music (The Weeknd, etc.)
+      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
       
-      // 2. THE FIX: Remove the "mp4" restriction.
-      // We accept ANY audio container (WebM or MP4) and just take the best quality.
-      // Android handles WebM natively, so this is safe.
+      // FIX 2: Accept EVERYTHING. 
+      // Do not filter by "mp4". Just take the highest quality audio (usually WebM).
+      // Android supports WebM/Opus natively.
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
-      // 3. THE FIX: Remove the "User-Agent" Header.
-      // The VR client generates a URL that works on its own.
-      // Adding a "Windows" header confuses YouTube and causes 403 errors.
+      // FIX 3: Use a Standard Browser Header.
+      // This matches the Default Client's behavior and bypasses 403 errors.
       final source = AudioSource.uri(
         audioStream.url,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
         tag: MediaItem(
           id: song.id,
           album: "OXCY Music",
@@ -242,6 +242,7 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
+      // Detailed error for debugging (even if user can't see it)
       _errorMessage = "Playback Error. Song might be restricted.";
       next(); 
     } finally {
