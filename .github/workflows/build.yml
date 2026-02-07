@@ -18,9 +18,9 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # STEP: SAFE GENERATION (NO 'afterEvaluate')
+      # STEP: SAFE GENERATION (Fixed Syntax Error)
       # ---------------------------------------------------
-      - name: 🛡️ SAFE BUILD GENERATION
+      - name: 🛡️ FINAL FIXED BUILD GENERATION
         run: |
           flutter config --no-analytics
           flutter create --platforms=android .
@@ -58,7 +58,7 @@ jobs:
           }
           include ":app"' > android/settings.gradle
 
-          # 2. BUILD.GRADLE (THE SAFE FIX)
+          # 2. BUILD.GRADLE (WITH NAMESPACE PATCH)
           echo 'allprojects {
               repositories {
                   google()
@@ -72,23 +72,22 @@ jobs:
           subprojects {
               project.evaluationDependsOn(":app")
 
-              // --- THE SAFE PATCHER (NO afterEvaluate) ---
-              // This waits for the plugin to load and fixes it INSTANTLY.
+              // --- THE SAFE PATCHER ---
+              // Fixes "Namespace not specified" for old plugins
               plugins.withId("com.android.library") {
                   android {
-                      // If the plugin forgot to set a namespace, we set it now.
                       if (namespace == null) {
                           namespace = project.group.toString()
                       }
                   }
               }
-              // -------------------------------------------
+              // ------------------------
           }
           tasks.register("clean", Delete) {
               delete rootProject.buildDir
           }' > android/build.gradle
 
-          # 3. APP/BUILD.GRADLE (SDK 35)
+          # 3. APP/BUILD.GRADLE (SYNTAX ERROR REMOVED)
           echo 'plugins {
               id "com.android.application"
               id "org.jetbrains.kotlin.android"
@@ -129,9 +128,13 @@ jobs:
               }
               buildTypes {
                   release {
+                      // FIXED: Removed the crashing line here.
                       signingConfig signingConfigs.debug
-                      checkReleaseBuilds false
                   }
+              }
+              // Safe Lint Options
+              lint {
+                  abortOnError false
               }
           }
           dependencies {
