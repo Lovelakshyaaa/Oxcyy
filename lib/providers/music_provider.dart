@@ -168,7 +168,6 @@ class MusicProvider with ChangeNotifier {
            var snippet = item['snippet'];
            var thumbs = snippet['thumbnails'];
            
-           // Safe Thumbnail Extraction
            String img = "";
            if (thumbs != null) {
              if (thumbs.containsKey('maxres')) {
@@ -199,6 +198,49 @@ class MusicProvider with ChangeNotifier {
       }
     } catch (e) {
       print("Network Error: $e");
+    }
+  }
+
+  // --- RESTORED METHOD: playPlaylist (Fixes Build Error) ---
+  Future<void> playPlaylist(Song album) async {
+    await _player.stop();
+    _isMiniPlayerVisible = true;
+    _isLoadingSong = true; 
+    notifyListeners();
+    
+    try {
+      // 1. Get Playlist Metadata
+      var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
+      
+      // 2. Get Videos
+      var videos = _yt.playlists.getVideos(playlist.id);
+      
+      List<Song> albumSongs = [];
+      await for (var video in videos) {
+        albumSongs.add(Song(
+          id: video.id.value,
+          title: video.title,
+          artist: video.author,
+          thumbUrl: video.thumbnails.highResUrl,
+          type: 'video',
+        ));
+        if (albumSongs.length >= 50) break; // Safety limit
+      }
+
+      if (albumSongs.isNotEmpty) {
+        _queue = albumSongs;
+        _currentIndex = 0;
+        _isPlayerExpanded = true;
+        await _loadAndPlay();
+      } else {
+        _isLoadingSong = false;
+        notifyListeners();
+      }
+    } catch (e) {
+      print("Playlist Error: $e");
+      _isLoadingSong = false;
+      _errorMessage = "Could not load album.";
+      notifyListeners();
     }
   }
 
