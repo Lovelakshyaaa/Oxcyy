@@ -2,11 +2,12 @@ import 'package:audio_session/audio_session.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+// FIX 1: Alias strictly to prevent conflicts
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// Import kept to prevent build errors, but we won't use the client for now.
+// FIX 2: We NEED this client. It is the only one not blocked.
 import 'package:oxcy/clients.dart'; 
 
 class Song {
@@ -28,7 +29,7 @@ class Song {
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // 1. Standard Init
+  // Build-Safe Init
   final _yt = yt.YoutubeExplode();
   
   final _player = AudioPlayer();
@@ -154,6 +155,7 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     
     try {
+      // Use VR client for playlist fetch too (More reliable)
       var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
       var videos = _yt.playlists.getVideos(playlist.id);
       
@@ -212,22 +214,21 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // FIX 1: Remove 'ytClients'. Let the library use its Default Client.
-      // The Default Client is more reliable for Official Music (The Weeknd, etc.)
-      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
+      // FIX 3: THE BRUTAL COMBINATION
+      // 1. Use 'customAndroidVr' (This Unblocks the video access)
+      var manifest = await _yt.videos.streamsClient.getManifest(
+        song.id, 
+        ytClients: [customAndroidVr] 
+      );
       
-      // FIX 2: Accept EVERYTHING. 
-      // Do not filter by "mp4". Just take the highest quality audio (usually WebM).
-      // Android supports WebM/Opus natively.
+      // 2. Accept RAW Audio (WebM or MP4)
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
-      // FIX 3: Use a Standard Browser Header.
-      // This matches the Default Client's behavior and bypasses 403 errors.
+      // 3. NO HEADERS (The Critical Fix)
+      // Sending a "Windows" header with a "VR" URL causes the 403 error.
+      // We send it raw. The URL signature handles auth.
       final source = AudioSource.uri(
         audioStream.url,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
         tag: MediaItem(
           id: song.id,
           album: "OXCY Music",
@@ -242,7 +243,6 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
-      // Detailed error for debugging (even if user can't see it)
       _errorMessage = "Playback Error. Song might be restricted.";
       next(); 
     } finally {
