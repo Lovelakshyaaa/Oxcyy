@@ -6,6 +6,9 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
+// IMPORTS THE CUSTOM CLIENT (Adjust path if your file is elsewhere)
+import 'package:oxcy/clients.dart'; 
+
 // --- DATA MODEL ---
 class Song {
   final String id;
@@ -28,9 +31,9 @@ class MusicProvider with ChangeNotifier {
   // ⚠️ WARNING: Keep your API Key secret in production!
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  final _yt = YoutubeExplode();
+  // FIX #1: Use the custom "VR" client to bypass restrictions
+  final _yt = YoutubeExplode(customAndroidVr);
   
-  // FIXED: Standard initialization (removed complex load control for stability)
   final _player = AudioPlayer();
   
   List<Song> _searchResults = []; 
@@ -77,7 +80,6 @@ class MusicProvider with ChangeNotifier {
   Future<void> _initAudioSession() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    // This fixes the "AndroidAudioAttributes" error internally
     _player.setAndroidAudioAttributes(
       const AndroidAudioAttributes(
         contentType: AndroidAudioContentType.music,
@@ -113,14 +115,12 @@ class MusicProvider with ChangeNotifier {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // Safely handle if nextPageToken is missing
         _nextPageToken = data['nextPageToken']; 
         List<dynamic> items = data['items'];
         
         List<Song> newResults = items.map((item) {
            var thumbs = item['snippet']['thumbnails'];
            String img = thumbs['high']['url'];
-           // Safety check for maxres
            if (thumbs.containsKey('maxres')) img = thumbs['maxres']['url'];
 
            String id = item['id']['videoId'] ?? item['id']['playlistId'];
@@ -176,7 +176,7 @@ class MusicProvider with ChangeNotifier {
           thumbUrl: video.thumbnails.highResUrl,
           type: 'video',
         ));
-        if (albumSongs.length >= 50) break; // Limit to 50 for performance
+        if (albumSongs.length >= 50) break; 
       }
 
       if (albumSongs.isNotEmpty) {
@@ -197,11 +197,10 @@ class MusicProvider with ChangeNotifier {
 
   Future<void> next() async {
     if (_queue.isEmpty) return;
-    // await _player.stop(); // Optional: smoother transition if removed
     if (_currentIndex < _queue.length - 1) {
       _currentIndex++;
     } else {
-      _currentIndex = 0; // Loop back to start
+      _currentIndex = 0; 
     }
     await _loadAndPlay();
   }
@@ -211,7 +210,6 @@ class MusicProvider with ChangeNotifier {
     if (_player.position.inSeconds > 3) {
       _player.seek(Duration.zero);
     } else if (_currentIndex > 0) {
-      // await _player.stop();
       _currentIndex--;
       await _loadAndPlay();
     }
@@ -224,15 +222,21 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // FIXED: Use standard manifest fetching
-      // The 'ytClients' parameter does NOT exist in standard version 3.0.5
       var manifest = await _yt.videos.streamsClient.getManifest(song.id);
       
-      // Get the best audio-only stream (m4a)
-      var audioStream = manifest.audioOnly.withHighestBitrate();
+      // FIX #2: Filter for MP4 (M4A) specifically. 
+      // This is crucial for cross-platform stability (especially iOS).
+      var audioStream = manifest.audioOnly
+          .where((s) => s.container == Container.mp4)
+          .withHighestBitrate();
       
+      // FIX #3: Inject User-Agent Headers.
+      // This tells YouTube "I am a browser" instead of "I am a bot", preventing 403 errors.
       final source = AudioSource.uri(
         audioStream.url,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
         tag: MediaItem(
           id: song.id,
           album: "OXCY Music",
@@ -248,8 +252,7 @@ class MusicProvider with ChangeNotifier {
     } catch (e) {
       print("Audio Error: $e");
       _errorMessage = "Playback Error. Song might be restricted.";
-      // Auto-skip on error (optional)
-      // next(); 
+      next(); // Auto-skip if it fails
     } finally {
       _isLoadingSong = false;
       notifyListeners();
