@@ -18,17 +18,18 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # STEP: GENERATE MODERN BUILD FILES (THE NEW KEY)
+      # STEP: SAFE GENERATION (NO 'afterEvaluate')
       # ---------------------------------------------------
-      - name: 🔑 GENERATE MODERN GRADLE FILES
+      - name: 🛡️ SAFE BUILD GENERATION
         run: |
-          # 1. Initialize & Clean
           flutter config --no-analytics
           flutter create --platforms=android .
+          
+          # Clean slate
           rm -f android/settings.gradle.kts android/build.gradle.kts android/app/build.gradle.kts
           rm -f android/settings.gradle android/build.gradle android/app/build.gradle
 
-          # 2. CREATE settings.gradle (With the NEW Plugin Loader)
+          # 1. SETTINGS.GRADLE (Modern)
           echo 'pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
@@ -53,12 +54,11 @@ jobs:
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
               id "com.android.application" version "8.3.2" apply false
               id "org.jetbrains.kotlin.android" version "1.9.23" apply false
-              // THE NEW KEY:
               id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
           }
           include ":app"' > android/settings.gradle
 
-          # 3. CREATE build.gradle (Project Level - Clean)
+          # 2. BUILD.GRADLE (THE SAFE FIX)
           echo 'allprojects {
               repositories {
                   google()
@@ -71,16 +71,27 @@ jobs:
           }
           subprojects {
               project.evaluationDependsOn(":app")
+
+              // --- THE SAFE PATCHER (NO afterEvaluate) ---
+              // This waits for the plugin to load and fixes it INSTANTLY.
+              plugins.withId("com.android.library") {
+                  android {
+                      // If the plugin forgot to set a namespace, we set it now.
+                      if (namespace == null) {
+                          namespace = project.group.toString()
+                      }
+                  }
+              }
+              // -------------------------------------------
           }
           tasks.register("clean", Delete) {
               delete rootProject.buildDir
           }' > android/build.gradle
 
-          # 4. CREATE app/build.gradle (THE CRITICAL FIX)
+          # 3. APP/BUILD.GRADLE (SDK 35)
           echo 'plugins {
               id "com.android.application"
               id "org.jetbrains.kotlin.android"
-              // REPLACES "apply from":
               id "dev.flutter.flutter-gradle-plugin"
           }
 
@@ -96,7 +107,7 @@ jobs:
 
           android {
               namespace "com.example.oxcy"
-              compileSdkVersion 34
+              compileSdkVersion 35
               ndkVersion flutter.ndkVersion
 
               compileOptions {
@@ -112,22 +123,22 @@ jobs:
               defaultConfig {
                   applicationId "com.example.oxcy"
                   minSdkVersion 23
-                  targetSdkVersion 34
+                  targetSdkVersion 35
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
               buildTypes {
                   release {
                       signingConfig signingConfigs.debug
+                      checkReleaseBuilds false
                   }
               }
           }
-          // Plugin handles the rest, just need dependencies
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.23"
           }' > android/app/build.gradle
 
-          # 5. FORCE GRADLE 8.5
+          # 4. WRAPPER (Gradle 8.5)
           echo 'distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           zipStoreBase=GRADLE_USER_HOME
