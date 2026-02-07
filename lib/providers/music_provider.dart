@@ -2,12 +2,11 @@ import 'package:audio_session/audio_session.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-// FIX: Alias 'yt' prevents "Playlist defined" errors
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// --- CLIENTS (Embedded) ---
+// --- 1. EMBEDDED CLIENTS (The Bypass Keys) ---
 
 const customAndroidVr = yt.YoutubeApiClient({
   'context': {
@@ -60,7 +59,7 @@ const customAndroidSdkless = yt.YoutubeApiClient({
   'requireJsPlayer': false,
 }, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
 
-// ---------------------------
+// --- 2. DATA MODEL ---
 
 class Song {
   final String id;
@@ -78,13 +77,15 @@ class Song {
   });
 }
 
+// --- 3. PROVIDER LOGIC ---
+
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
   final _yt = yt.YoutubeExplode();
   final _player = AudioPlayer();
   
-  // STRATEGY: VR -> iOS -> Sdkless
+  // BYPASS STRATEGY: VR -> iOS -> Sdkless
   final List<yt.YoutubeApiClient> _streamClients = [
     customAndroidVr,
     customIos,
@@ -238,7 +239,7 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // CRITICAL: This 'ytClients' param works ONLY with the Git version in pubspec.yaml
+      // CRITICAL FIX: 'ytClients' param works ONLY with the Git version in pubspec
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
         ytClients: _streamClients 
