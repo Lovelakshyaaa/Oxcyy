@@ -18,7 +18,7 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # STEP: SAFE GENERATION (Fixed Syntax Error)
+      # STEP: SAFE GENERATION (With JVM Enforcer)
       # ---------------------------------------------------
       - name: 🛡️ FINAL FIXED BUILD GENERATION
         run: |
@@ -58,7 +58,7 @@ jobs:
           }
           include ":app"' > android/settings.gradle
 
-          # 2. BUILD.GRADLE (WITH NAMESPACE PATCH)
+          # 2. BUILD.GRADLE (THE JVM DICTATOR 👮)
           echo 'allprojects {
               repositories {
                   google()
@@ -72,22 +72,33 @@ jobs:
           subprojects {
               project.evaluationDependsOn(":app")
 
-              // --- THE SAFE PATCHER ---
-              // Fixes "Namespace not specified" for old plugins
+              // --- THE FIX: FORCE EVERYONE TO JAVA 17 ---
               plugins.withId("com.android.library") {
                   android {
+                      // 1. Fix Namespace for old plugins
                       if (namespace == null) {
                           namespace = project.group.toString()
                       }
+                      // 2. FORCE Java 17 Compatibility (Fixes "Inconsistent JVM-target")
+                      compileOptions {
+                          sourceCompatibility = JavaVersion.VERSION_17
+                          targetCompatibility = JavaVersion.VERSION_17
+                      }
                   }
               }
-              // ------------------------
+              // 3. FORCE Kotlin 17 for everyone
+              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                  kotlinOptions {
+                      jvmTarget = "17"
+                  }
+              }
+              // ------------------------------------------
           }
           tasks.register("clean", Delete) {
               delete rootProject.buildDir
           }' > android/build.gradle
 
-          # 3. APP/BUILD.GRADLE (SYNTAX ERROR REMOVED)
+          # 3. APP/BUILD.GRADLE (Kept exactly as you had it)
           echo 'plugins {
               id "com.android.application"
               id "org.jetbrains.kotlin.android"
@@ -128,11 +139,9 @@ jobs:
               }
               buildTypes {
                   release {
-                      // FIXED: Removed the crashing line here.
                       signingConfig signingConfigs.debug
                   }
               }
-              // Safe Lint Options
               lint {
                   abortOnError false
               }
