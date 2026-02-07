@@ -2,11 +2,12 @@ import 'package:audio_session/audio_session.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+// FIX 1: Alias the library to 'yt' to avoid conflict with Flutter's 'Container'
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// IMPORTS THE CUSTOM CLIENT (Adjust path if your file is elsewhere)
+// IMPORTS THE CUSTOM CLIENT (Kept for reference, though unused in init for now)
 import 'package:oxcy/clients.dart'; 
 
 // --- DATA MODEL ---
@@ -31,8 +32,9 @@ class MusicProvider with ChangeNotifier {
   // ⚠️ WARNING: Keep your API Key secret in production!
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // FIX #1: Use the custom "VR" client to bypass restrictions
-  final _yt = YoutubeExplode(customAndroidVr);
+  // FIX 2: Use standard initialization. 
+  // The installed version of the library does not accept arguments here.
+  final _yt = yt.YoutubeExplode();
   
   final _player = AudioPlayer();
   
@@ -164,7 +166,8 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     
     try {
-      var playlist = await _yt.playlists.get(album.id);
+      // FIX 3: Use the 'yt' prefix for PlaylistId too
+      var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
       var videos = _yt.playlists.getVideos(playlist.id);
       
       List<Song> albumSongs = [];
@@ -224,14 +227,11 @@ class MusicProvider with ChangeNotifier {
       
       var manifest = await _yt.videos.streamsClient.getManifest(song.id);
       
-      // FIX #2: Filter for MP4 (M4A) specifically. 
-      // This is crucial for cross-platform stability (especially iOS).
+      // FIX 4: Use 'yt.Container.mp4' so Flutter doesn't think it's a UI widget
       var audioStream = manifest.audioOnly
-          .where((s) => s.container == Container.mp4)
+          .where((s) => s.container == yt.Container.mp4)
           .withHighestBitrate();
       
-      // FIX #3: Inject User-Agent Headers.
-      // This tells YouTube "I am a browser" instead of "I am a bot", preventing 403 errors.
       final source = AudioSource.uri(
         audioStream.url,
         headers: {
