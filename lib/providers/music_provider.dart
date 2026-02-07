@@ -2,7 +2,6 @@ import 'package:audio_session/audio_session.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-// FIX 1: Keep 'yt' alias to prevent "Container" conflict
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -27,10 +26,9 @@ class Song {
 }
 
 class MusicProvider with ChangeNotifier {
-  // ⚠️ WARNING: Keep your API Key secret in production!
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // STEP 1: Init with Standard Constructor (Fixes Build Error)
+  // Standard Init (Works for build)
   final _yt = yt.YoutubeExplode();
   
   final _player = AudioPlayer();
@@ -214,25 +212,22 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // STEP 2: Inject the Custom VR Client HERE
-      // This allows us to use standard init for building, but VR power for streaming.
+      // 1. Get Manifest using the VR Client (Correct)
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
-        ytClients: [customAndroidVr] // <--- THIS IS THE MAGIC KEY 🔑
+        ytClients: [customAndroidVr]
       );
       
-      // FIX 3: THE STRING CHECK
-      // Instead of looking for "yt.Container" (which doesn't exist), 
-      // we just check if the container name is "mp4".
-      var audioStream = manifest.audioOnly
-          .where((s) => s.container.name.toString() == 'mp4') 
-          .withHighestBitrate();
+      // 2. THE FIX: Remove the "mp4" restriction.
+      // We accept ANY audio container (WebM or MP4) and just take the best quality.
+      // Android handles WebM natively, so this is safe.
+      var audioStream = manifest.audioOnly.withHighestBitrate();
       
+      // 3. THE FIX: Remove the "User-Agent" Header.
+      // The VR client generates a URL that works on its own.
+      // Adding a "Windows" header confuses YouTube and causes 403 errors.
       final source = AudioSource.uri(
         audioStream.url,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
         tag: MediaItem(
           id: song.id,
           album: "OXCY Music",
