@@ -13,9 +13,8 @@ import 'package:just_audio_background/just_audio_background.dart';
 // ====================================================================
 
 /// A pool of client configurations mimicking various YouTube frontends.
-/// Rotate through these when one fails.
 final List<yt.YoutubeApiClient> _clientPool = [
-  // Android VR Client (High Success Rate - The "Golden Key")
+  // Android VR Client (The "Golden Key")
   yt.YoutubeApiClient({
     'context': {
       'client': {
@@ -68,7 +67,7 @@ final List<yt.YoutubeApiClient> _clientPool = [
     'requireJsPlayer': true,
   }, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false'),
 
-  // iOS Client (Good backup for standard streams)
+  // iOS Client (Good backup)
   yt.YoutubeApiClient({
     'context': {
       'client': {
@@ -103,20 +102,19 @@ Future<yt.StreamManifest?> _getManifestWithRetry(String videoId,
   for (int attempt = 0; attempt < maxAttempts; attempt++) {
     for (var client in shuffledPool) {
       try {
-        print(
-            'Attempt $attempt: Fetching manifest for $videoId with client: ${client.context['client']?['clientName']}');
+        print('Attempt $attempt: Fetching manifest for $videoId with a rotating client...');
         
         // CRITICAL: We pass ONLY one client at a time to isolate failures
         manifest = await ytInstance.videos.streamsClient
             .getManifest(videoId, ytClients: [client]);
             
         if (manifest != null && manifest.audioOnly.isNotEmpty) {
-          print('Success with client: ${client.context['client']?['clientName']}');
+          print('Success! Manifest retrieved.');
           return manifest;
         }
       } catch (e) {
         lastError = e as Exception;
-        print('Client ${client.context['client']?['clientName']} failed: $e');
+        print('A client failed: $e');
         // Short delay before trying next client
         await Future.delayed(const Duration(milliseconds: 300));
       }
