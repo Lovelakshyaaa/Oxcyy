@@ -3,6 +3,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 // Credit: Based on Musify/yt-dlp implementation
 // These "Fake Clients" trick YouTube into giving us working streams.
 
+// The "Golden Key" - Mimics an Oculus Quest 3 to get high-quality M4A streams
 const customAndroidVr = YoutubeApiClient({
   'context': {
     'client': {
@@ -21,6 +22,7 @@ const customAndroidVr = YoutubeApiClient({
   },
 }, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
 
+// Backup Client - Mimics an older Android phone (use only if VR fails)
 const customAndroidSdkless = YoutubeApiClient({
   'context': {
     'client': {
