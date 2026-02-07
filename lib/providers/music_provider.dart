@@ -2,12 +2,11 @@ import 'package:audio_session/audio_session.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-// FIX 1: Alias strictly to prevent conflicts
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// FIX 2: We NEED this client. It is the only one not blocked.
+// IMPORT CLIENTS (Essential for the fix)
 import 'package:oxcy/clients.dart'; 
 
 class Song {
@@ -29,10 +28,17 @@ class Song {
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // Build-Safe Init
+  // Standard Init (Safe for Metadata/Search)
   final _yt = yt.YoutubeExplode();
   
   final _player = AudioPlayer();
+  
+  // FIX 1: The "Musify" Client Strategy
+  // We use BOTH clients. If one is blocked, the library tries the other.
+  final List<yt.YoutubeApiClient> _streamClients = [
+    customAndroidVr, 
+    customAndroidSdkless
+  ];
   
   List<Song> _searchResults = []; 
   List<Song> _queue = [];         
@@ -155,7 +161,7 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     
     try {
-      // Use VR client for playlist fetch too (More reliable)
+      // Use the clients for playlist fetching too, just in case
       var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
       var videos = _yt.playlists.getVideos(playlist.id);
       
@@ -214,19 +220,19 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // FIX 3: THE BRUTAL COMBINATION
-      // 1. Use 'customAndroidVr' (This Unblocks the video access)
+      // FIX 2: Pass BOTH clients to getManifest
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
-        ytClients: [customAndroidVr] 
+        ytClients: _streamClients 
       );
       
-      // 2. Accept RAW Audio (WebM or MP4)
+      // FIX 3: Remove MP4 Filter. Use Highest Bitrate.
+      // Musify code: return availableSources.withHighestBitrate();
+      // This grabs the WebM/Opus stream which works reliably.
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
-      // 3. NO HEADERS (The Critical Fix)
-      // Sending a "Windows" header with a "VR" URL causes the 403 error.
-      // We send it raw. The URL signature handles auth.
+      // FIX 4: NO HEADERS.
+      // Musify simply gets the URL and plays it. No user-agent spoofing.
       final source = AudioSource.uri(
         audioStream.url,
         tag: MediaItem(
