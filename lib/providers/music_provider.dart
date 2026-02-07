@@ -2,15 +2,14 @@ import 'package:audio_session/audio_session.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-// FIX 1: Alias the library to 'yt' to avoid conflict with Flutter's 'Container'
+// FIX 1: Keep 'yt' alias to prevent "Container" conflict
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// IMPORTS THE CUSTOM CLIENT (Kept for reference, though unused in init for now)
+// Import your custom clients
 import 'package:oxcy/clients.dart'; 
 
-// --- DATA MODEL ---
 class Song {
   final String id;
   final String title;
@@ -27,13 +26,11 @@ class Song {
   });
 }
 
-// --- PROVIDER ---
 class MusicProvider with ChangeNotifier {
   // ⚠️ WARNING: Keep your API Key secret in production!
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // FIX 2: Use standard initialization. 
-  // The installed version of the library does not accept arguments here.
+  // STEP 1: Init with Standard Constructor (Fixes Build Error)
   final _yt = yt.YoutubeExplode();
   
   final _player = AudioPlayer();
@@ -69,8 +66,6 @@ class MusicProvider with ChangeNotifier {
 
   MusicProvider() {
     _initAudioSession();
-    
-    // Listen for song completion to auto-play next
     _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         next();
@@ -90,7 +85,6 @@ class MusicProvider with ChangeNotifier {
     );
   }
 
-  // --- SEARCH (YouTube Data API) ---
   Future<void> search(String query) async {
     _currentQuery = query;
     _searchResults = [];
@@ -139,15 +133,11 @@ class MusicProvider with ChangeNotifier {
         
         _searchResults.addAll(newResults);
         notifyListeners();
-      } else {
-        print("API Error: ${response.body}");
       }
     } catch (e) {
       print("Network Error: $e");
     }
   }
-
-  // --- PLAYBACK ENGINE ---
 
   Future<void> play(Song song) async {
     await _player.stop();
@@ -166,7 +156,6 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     
     try {
-      // FIX 3: Use the 'yt' prefix for PlaylistId too
       var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
       var videos = _yt.playlists.getVideos(playlist.id);
       
@@ -225,9 +214,13 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      var manifest = await _yt.videos.streamsClient.getManifest(song.id);
+      // STEP 2: Inject the Custom VR Client HERE
+      // This bypasses the restriction without breaking the build constructor.
+      var manifest = await _yt.videos.streamsClient.getManifest(
+        song.id, 
+        ytClients: [customAndroidVr] // <--- THIS IS THE MAGIC KEY 🔑
+      );
       
-      // FIX 4: Use 'yt.Container.mp4' so Flutter doesn't think it's a UI widget
       var audioStream = manifest.audioOnly
           .where((s) => s.container == yt.Container.mp4)
           .withHighestBitrate();
@@ -252,14 +245,13 @@ class MusicProvider with ChangeNotifier {
     } catch (e) {
       print("Audio Error: $e");
       _errorMessage = "Playback Error. Song might be restricted.";
-      next(); // Auto-skip if it fails
+      next(); 
     } finally {
       _isLoadingSong = false;
       notifyListeners();
     }
   }
   
-  // --- CONTROLS ---
   void togglePlayerView() { _isPlayerExpanded = !_isPlayerExpanded; notifyListeners(); }
   void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
   void togglePlayPause() { if (_player.playing) _player.pause(); else _player.play(); }
