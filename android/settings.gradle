@@ -1,0 +1,32 @@
+pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        def propertiesFile = new File("local.properties")
+        if (propertiesFile.exists()) {
+            propertiesFile.withInputStream { properties.load(it) }
+        }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        if (flutterSdkPath == null) {
+            flutterSdkPath = System.getenv("FLUTTER_ROOT")
+        }
+        return flutterSdkPath
+    }()
+
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+    // FORCE SAFE VERSION: 7.4.2 (The fix for filePermissions)
+    id "com.android.application" version "7.4.2" apply false
+    // MATCHING KOTLIN VERSION
+    id "org.jetbrains.kotlin.android" version "1.8.10" apply false
+}
+
+include ":app"
