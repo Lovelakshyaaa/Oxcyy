@@ -2,11 +2,12 @@ import 'package:audio_session/audio_session.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+// FIX: Alias 'yt' prevents "Playlist defined" errors
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// --- DEFINING CLIENTS (Embedded for safety) ---
+// --- CLIENTS (Embedded) ---
 
 const customAndroidVr = yt.YoutubeApiClient({
   'context': {
@@ -59,7 +60,7 @@ const customAndroidSdkless = yt.YoutubeApiClient({
   'requireJsPlayer': false,
 }, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
 
-// ---------------------------------------------------------
+// ---------------------------
 
 class Song {
   final String id;
@@ -80,11 +81,10 @@ class Song {
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // Init
   final _yt = yt.YoutubeExplode();
   final _player = AudioPlayer();
   
-  // STRATEGY: Try VR (Quality) -> iOS (Reliability) -> Sdkless (Fallback)
+  // STRATEGY: VR -> iOS -> Sdkless
   final List<yt.YoutubeApiClient> _streamClients = [
     customAndroidVr,
     customIos,
@@ -101,7 +101,6 @@ class MusicProvider with ChangeNotifier {
   bool _isLoadingSong = false;
   String? _errorMessage;
   
-  // UI State
   bool _isMiniPlayerVisible = false;
   bool _isPlayerExpanded = false;
   bool _isShuffling = false;
@@ -168,6 +167,7 @@ class MusicProvider with ChangeNotifier {
            var snippet = item['snippet'];
            var thumbs = snippet['thumbnails'];
            
+           // Safe Thumbnail Extraction
            String img = "";
            if (thumbs != null) {
              if (thumbs.containsKey('maxres')) {
@@ -238,16 +238,14 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // FIX: Use the client list with the Hexer10 fork
+      // CRITICAL: This 'ytClients' param works ONLY with the Git version in pubspec.yaml
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
         ytClients: _streamClients 
       );
       
-      // FIX: Trust the library to find the best audio (WebM/Opus)
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
-      // FIX: No headers needed with the Git version
       final source = AudioSource.uri(
         audioStream.url,
         tag: MediaItem(
