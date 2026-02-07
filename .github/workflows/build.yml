@@ -160,6 +160,12 @@ jobs:
           chmod +x android/gradlew
 
       - run: flutter pub get
+      
+      # --- THE CRITICAL FIX: FLUSH OLD DEPENDENCIES ---
+      - run: rm -f pubspec.lock
+      - run: flutter pub get
+      # ------------------------------------------------
+
       - run: flutter build apk --release --no-tree-shake-icons
 
       - uses: actions/upload-artifact@v4
