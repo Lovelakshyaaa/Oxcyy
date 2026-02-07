@@ -7,7 +7,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. Set Java to 17 (The Gold Standard for Gradle 8)
       - uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
@@ -19,23 +18,17 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # STEP 2: THE "JAVA 17 ENFORCER" SCRIPT
+      # STEP: GENERATE MODERN BUILD FILES (THE NEW KEY)
       # ---------------------------------------------------
-      - name: 🔒 FORCE JAVA 17 & GRADLE 8
+      - name: 🔑 GENERATE MODERN GRADLE FILES
         run: |
-          # 1. Initialize Wrapper (Generates files we will overwrite)
+          # 1. Initialize & Clean
           flutter config --no-analytics
           flutter create --platforms=android .
+          rm -f android/settings.gradle.kts android/build.gradle.kts android/app/build.gradle.kts
+          rm -f android/settings.gradle android/build.gradle android/app/build.gradle
 
-          # 2. DELETE everything generated (Wipe the slate clean)
-          rm -f android/settings.gradle.kts
-          rm -f android/build.gradle.kts
-          rm -f android/app/build.gradle.kts
-          rm -f android/settings.gradle
-          rm -f android/build.gradle
-          rm -f android/app/build.gradle
-
-          # 3. CREATE settings.gradle (AGP 8.3.2 + Kotlin 1.9.23)
+          # 2. CREATE settings.gradle (With the NEW Plugin Loader)
           echo 'pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
@@ -60,10 +53,12 @@ jobs:
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
               id "com.android.application" version "8.3.2" apply false
               id "org.jetbrains.kotlin.android" version "1.9.23" apply false
+              // THE NEW KEY:
+              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
           }
           include ":app"' > android/settings.gradle
 
-          # 4. CREATE build.gradle (Project Level)
+          # 3. CREATE build.gradle (Project Level - Clean)
           echo 'allprojects {
               repositories {
                   google()
@@ -81,20 +76,23 @@ jobs:
               delete rootProject.buildDir
           }' > android/build.gradle
 
-          # 5. CREATE build.gradle (App Level) - STRICT JAVA 17 MODE
-          echo 'def localProperties = new Properties()
+          # 4. CREATE app/build.gradle (THE CRITICAL FIX)
+          echo 'plugins {
+              id "com.android.application"
+              id "org.jetbrains.kotlin.android"
+              // REPLACES "apply from":
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+
+          def localProperties = new Properties()
           def localPropertiesFile = rootProject.file("local.properties")
           if (localPropertiesFile.exists()) {
               localPropertiesFile.withInputStream { localProperties.load(it) }
           }
-          def flutterRoot = localProperties.getProperty("flutter.sdk")
-          if (flutterRoot == null) {
-              flutterRoot = System.getenv("FLUTTER_ROOT")
-          }
-
-          apply plugin: "com.android.application"
-          apply plugin: "kotlin-android"
-          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+          def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+          if (flutterVersionCode == null) { flutterVersionCode = "1" }
+          def flutterVersionName = localProperties.getProperty("flutter.versionName")
+          if (flutterVersionName == null) { flutterVersionName = "1.0" }
 
           android {
               namespace "com.example.oxcy"
@@ -102,12 +100,10 @@ jobs:
               ndkVersion flutter.ndkVersion
 
               compileOptions {
-                  // HERE IS THE FIX: No 1.8. Strictly 17.
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
               kotlinOptions {
-                  // FORCES KOTLIN TO EMIT JAVA 17 BYTECODE
                   jvmTarget = "17"
               }
               sourceSets {
@@ -117,8 +113,8 @@ jobs:
                   applicationId "com.example.oxcy"
                   minSdkVersion 23
                   targetSdkVersion 34
-                  versionCode 1
-                  versionName "1.0"
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
               }
               buildTypes {
                   release {
@@ -126,27 +122,20 @@ jobs:
                   }
               }
           }
-          flutter {
-              source "../.."
-          }
+          // Plugin handles the rest, just need dependencies
           dependencies {
-              // KOTLIN 1.9.23 IS COMPATIBLE WITH JAVA 17
               implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.23"
           }' > android/app/build.gradle
 
-          # 6. FORCE GRADLE 8.5 (Matches Java 17)
+          # 5. FORCE GRADLE 8.5
           echo 'distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-all.zip' > android/gradle/wrapper/gradle-wrapper.properties
-
-          # 7. PERMISSIONS
+          
           chmod +x android/gradlew
 
-      # ---------------------------------------------------
-      # STEP 3: BUILD
-      # ---------------------------------------------------
       - run: flutter pub get
       - run: flutter build apk --release --no-tree-shake-icons
 
