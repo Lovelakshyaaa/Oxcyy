@@ -6,8 +6,9 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// --- 1. EMBEDDED CLIENTS (The Bypass Keys) ---
+// --- 1. EMBEDDED CLIENTS (Only the Safe Ones) ---
 
+// VR Client: High Quality, works on Android
 const customAndroidVr = yt.YoutubeApiClient({
   'context': {
     'client': {
@@ -27,24 +28,7 @@ const customAndroidVr = yt.YoutubeApiClient({
   },
 }, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
 
-const customIos = yt.YoutubeApiClient({
-  'context': {
-    'client': {
-      'clientName': 'IOS',
-      'clientVersion': '19.45.4',
-      'deviceModel': 'iPhone16,2',
-      'userAgent': 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)',
-      'osName': 'iOS',
-      'osVersion': '18.1.0.22B83',
-      'hl': 'en',
-      'timeZone': 'UTC',
-      'utcOffsetMinutes': 0,
-    },
-    'contextClientName': 5,
-    'requireJsPlayer': false,
-  },
-}, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
-
+// Sdkless Client: Reliable Fallback
 const customAndroidSdkless = yt.YoutubeApiClient({
   'context': {
     'client': {
@@ -59,7 +43,7 @@ const customAndroidSdkless = yt.YoutubeApiClient({
   'requireJsPlayer': false,
 }, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
 
-// --- 2. DATA MODEL ---
+// --------------------------------------------------
 
 class Song {
   final String id;
@@ -77,18 +61,15 @@ class Song {
   });
 }
 
-// --- 3. PROVIDER LOGIC ---
-
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
   final _yt = yt.YoutubeExplode();
   final _player = AudioPlayer();
   
-  // BYPASS STRATEGY: VR -> iOS -> Sdkless
+  // FIX: ONLY use Android clients. Removing iOS fixes the "Spinner" loop.
   final List<yt.YoutubeApiClient> _streamClients = [
     customAndroidVr,
-    customIos,
     customAndroidSdkless
   ];
   
@@ -126,6 +107,13 @@ class MusicProvider with ChangeNotifier {
       if (state.processingState == ProcessingState.completed) {
         next();
       }
+      notifyListeners();
+    });
+    
+    // Detailed Error Logging
+    _player.playbackEventStream.listen((event) {}, onError: (Object e, StackTrace stackTrace) {
+      print('STREAM ERROR: $e');
+      _errorMessage = "Stream Error: Try another song";
       notifyListeners();
     });
   }
@@ -201,7 +189,6 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // --- RESTORED METHOD: playPlaylist (Fixes Build Error) ---
   Future<void> playPlaylist(Song album) async {
     await _player.stop();
     _isMiniPlayerVisible = true;
@@ -209,10 +196,7 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     
     try {
-      // 1. Get Playlist Metadata
       var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
-      
-      // 2. Get Videos
       var videos = _yt.playlists.getVideos(playlist.id);
       
       List<Song> albumSongs = [];
@@ -224,7 +208,7 @@ class MusicProvider with ChangeNotifier {
           thumbUrl: video.thumbnails.highResUrl,
           type: 'video',
         ));
-        if (albumSongs.length >= 50) break; // Safety limit
+        if (albumSongs.length >= 50) break;
       }
 
       if (albumSongs.isNotEmpty) {
@@ -237,7 +221,6 @@ class MusicProvider with ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print("Playlist Error: $e");
       _isLoadingSong = false;
       _errorMessage = "Could not load album.";
       notifyListeners();
@@ -281,7 +264,7 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // CRITICAL FIX: 'ytClients' param works ONLY with the Git version in pubspec
+      // CRITICAL: Using ONLY Android Clients
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
         ytClients: _streamClients 
@@ -305,7 +288,7 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
-      _errorMessage = "Playback Error. Song might be restricted.";
+      _errorMessage = "Playback Error.";
     } finally {
       _isLoadingSong = false;
       notifyListeners();
