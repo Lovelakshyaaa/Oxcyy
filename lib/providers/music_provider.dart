@@ -6,8 +6,59 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// IMPORT CLIENTS (Essential for the fix)
-import 'package:oxcy/clients.dart'; 
+// --- DEFINING CLIENTS HERE (No external file needed) ---
+
+const customIos = yt.YoutubeApiClient({
+  'context': {
+    'client': {
+      'clientName': 'IOS',
+      'clientVersion': '19.45.4',
+      'deviceModel': 'iPhone16,2',
+      'userAgent': 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)',
+      'osName': 'iOS',
+      'osVersion': '18.1.0.22B83',
+      'hl': 'en',
+      'timeZone': 'UTC',
+      'utcOffsetMinutes': 0,
+    },
+    'contextClientName': 5,
+    'requireJsPlayer': false,
+  },
+}, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
+
+const customAndroidVr = yt.YoutubeApiClient({
+  'context': {
+    'client': {
+      'clientName': 'ANDROID_VR',
+      'clientVersion': '1.65.10',
+      'deviceModel': 'Quest 3',
+      'osVersion': '12L',
+      'osName': 'Android',
+      'androidSdkVersion': '32',
+      'hl': 'en',
+      'timeZone': 'UTC',
+      'utcOffsetMinutes': 0,
+    },
+    'contextClientName': 28,
+    'requireJsPlayer': false,
+  },
+}, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
+
+const customAndroidSdkless = yt.YoutubeApiClient({
+  'context': {
+    'client': {
+      'clientName': 'ANDROID',
+      'clientVersion': '20.10.38',
+      'userAgent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+      'osName': 'Android',
+      'osVersion': '11',
+    },
+  },
+  'contextClientName': 3,
+  'requireJsPlayer': false,
+}, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
+
+// ---------------------------------------------------------
 
 class Song {
   final String id;
@@ -28,14 +79,14 @@ class Song {
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // Standard Init (Safe for Metadata/Search)
+  // Standard Init
   final _yt = yt.YoutubeExplode();
   
   final _player = AudioPlayer();
   
-  // FIX 1: The "Musify" Client Strategy
-  // We use BOTH clients. If one is blocked, the library tries the other.
+  // STRATEGY: Try iOS first (Most reliable), then VR, then Sdkless.
   final List<yt.YoutubeApiClient> _streamClients = [
+    customIos,
     customAndroidVr, 
     customAndroidSdkless
   ];
@@ -161,7 +212,7 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     
     try {
-      // Use the clients for playlist fetching too, just in case
+      // Use the clients for playlist fetch too
       var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
       var videos = _yt.playlists.getVideos(playlist.id);
       
@@ -220,19 +271,16 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // FIX 2: Pass BOTH clients to getManifest
+      // FIX 1: Try iOS, then VR, then Sdkless
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
         ytClients: _streamClients 
       );
       
-      // FIX 3: Remove MP4 Filter. Use Highest Bitrate.
-      // Musify code: return availableSources.withHighestBitrate();
-      // This grabs the WebM/Opus stream which works reliably.
+      // FIX 2: Accept ANY high quality audio (WebM or MP4)
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
-      // FIX 4: NO HEADERS.
-      // Musify simply gets the URL and plays it. No user-agent spoofing.
+      // FIX 3: NO HEADERS. Let the signed URL do the work.
       final source = AudioSource.uri(
         audioStream.url,
         tag: MediaItem(
@@ -249,7 +297,8 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
-      _errorMessage = "Playback Error. Song might be restricted.";
+      // If we are restricted, it's likely the clients are blocked on this IP.
+      _errorMessage = "Song Restricted. Try VPN or wait.";
       next(); 
     } finally {
       _isLoadingSong = false;
