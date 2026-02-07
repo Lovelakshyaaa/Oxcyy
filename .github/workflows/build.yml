@@ -1,30 +1,23 @@
 name: Build APK
-on:
-  push:
-    branches:
-      - main
-      - master
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Check out the code
       - uses: actions/checkout@v4
 
-      # ---------------------------------------------------------
-      # SKY'S REPAIR KIT: This fixes the files on the server automatically
-      # ---------------------------------------------------------
-      - name: 🔧 Force Fix Gradle Files (Mobile Mode)
+      # ---------------------------------------------------
+      # THE FIX: Now deletes android/app/build.gradle.kts too
+      # ---------------------------------------------------
+      - name: 🔧 TOTAL WIPEOUT & REBUILD
         run: |
-          # 1. DELETE the ghost files (The .kts files causing the loop)
+          echo "🔥 DESTROYING ALL KOTLIN BUILD FILES..."
           rm -f android/settings.gradle.kts
           rm -f android/build.gradle.kts
+          rm -f android/app/build.gradle.kts  # <--- THIS WAS THE CULPRIT!
 
-          # 2. CREATE safe android/settings.gradle (Groovy 7.4.2)
+          echo "🛠️ CREATING android/settings.gradle..."
           echo 'pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
@@ -52,7 +45,7 @@ jobs:
           }
           include ":app"' > android/settings.gradle
 
-          # 3. CREATE safe android/build.gradle (Standard Groovy)
+          echo "🛠️ CREATING android/build.gradle (Project)..."
           echo 'allprojects {
               repositories {
                   google()
@@ -70,41 +63,80 @@ jobs:
               delete rootProject.buildDir
           }' > android/build.gradle
 
-          # 4. FORCE Gradle 7.6.1 (Matches the 7.4.2 plugin)
+          echo "🛠️ CREATING android/app/build.gradle (App - CRITICAL)..."
+          echo 'def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file("local.properties")
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withInputStream { localProperties.load(it) }
+          }
+          def flutterRoot = localProperties.getProperty("flutter.sdk")
+          if (flutterRoot == null) {
+              flutterRoot = System.getenv("FLUTTER_ROOT")
+          }
+          def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+          if (flutterVersionCode == null) { flutterVersionCode = "1" }
+          def flutterVersionName = localProperties.getProperty("flutter.versionName")
+          if (flutterVersionName == null) { flutterVersionName = "1.0" }
+
+          apply plugin: "com.android.application"
+          apply plugin: "kotlin-android"
+          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+
+          android {
+              compileSdkVersion 33
+              ndkVersion flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_1_8
+                  targetCompatibility JavaVersion.VERSION_1_8
+              }
+              kotlinOptions {
+                  jvmTarget = "1.8"
+              }
+              sourceSets {
+                  main.java.srcDirs += "src/main/kotlin"
+              }
+              defaultConfig {
+                  applicationId "com.example.oxcy" 
+                  minSdkVersion 23 
+                  targetSdkVersion 33
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          flutter {
+              source "../.."
+          }
+          dependencies {
+              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.10"
+          }' > android/app/build.gradle
+
+          echo "🛠️ DOWNGRADING Wrapper to 7.6.1..."
           echo 'distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.1-all.zip' > android/gradle/wrapper/gradle-wrapper.properties
-      # ---------------------------------------------------------
-      # END OF REPAIR KIT
-      # ---------------------------------------------------------
 
-      # 2. Set up Java 17 (Required for modern Android builds)
       - uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
           cache: 'gradle'
 
-      # 3. Set up Flutter (Latest Stable Version)
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          cache: true
 
-      # 4. Clean previous builds
-      - run: flutter clean
-
-      # 5. Get Dependencies
       - run: flutter pub get
-
-      # 6. Build the APK
       - run: flutter build apk --release --no-tree-shake-icons
 
-      # 7. Upload the APK
       - uses: actions/upload-artifact@v4
         with:
           name: oxcy-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          compression-level: 0
