@@ -6,7 +6,26 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
-// --- DEFINING CLIENTS HERE (No external file needed) ---
+// --- DEFINING CLIENTS (Embedded for safety) ---
+
+const customAndroidVr = yt.YoutubeApiClient({
+  'context': {
+    'client': {
+      'clientName': 'ANDROID_VR',
+      'clientVersion': '1.65.10',
+      'deviceModel': 'Quest 3',
+      'userAgent': 'Mozilla/5.0 (Linux; Android 12L; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+      'osVersion': '12L',
+      'osName': 'Android',
+      'androidSdkVersion': '32',
+      'hl': 'en',
+      'timeZone': 'UTC',
+      'utcOffsetMinutes': 0,
+    },
+    'contextClientName': 28,
+    'requireJsPlayer': false,
+  },
+}, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
 
 const customIos = yt.YoutubeApiClient({
   'context': {
@@ -22,24 +41,6 @@ const customIos = yt.YoutubeApiClient({
       'utcOffsetMinutes': 0,
     },
     'contextClientName': 5,
-    'requireJsPlayer': false,
-  },
-}, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
-
-const customAndroidVr = yt.YoutubeApiClient({
-  'context': {
-    'client': {
-      'clientName': 'ANDROID_VR',
-      'clientVersion': '1.65.10',
-      'deviceModel': 'Quest 3',
-      'osVersion': '12L',
-      'osName': 'Android',
-      'androidSdkVersion': '32',
-      'hl': 'en',
-      'timeZone': 'UTC',
-      'utcOffsetMinutes': 0,
-    },
-    'contextClientName': 28,
     'requireJsPlayer': false,
   },
 }, 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false');
@@ -79,15 +80,14 @@ class Song {
 class MusicProvider with ChangeNotifier {
   static const String _apiKey = "AIzaSyBXc97B045znooQD-NDPBjp8SluKbDSbmc";
   
-  // Standard Init
+  // Init
   final _yt = yt.YoutubeExplode();
-  
   final _player = AudioPlayer();
   
-  // STRATEGY: Try iOS first (Most reliable), then VR, then Sdkless.
+  // STRATEGY: Try VR (Quality) -> iOS (Reliability) -> Sdkless (Fallback)
   final List<yt.YoutubeApiClient> _streamClients = [
+    customAndroidVr,
     customIos,
-    customAndroidVr, 
     customAndroidSdkless
   ];
   
@@ -98,10 +98,10 @@ class MusicProvider with ChangeNotifier {
   String? _nextPageToken;
   String _currentQuery = "";
   bool _isFetchingMore = false;
-  
   bool _isLoadingSong = false;
   String? _errorMessage;
   
+  // UI State
   bool _isMiniPlayerVisible = false;
   bool _isPlayerExpanded = false;
   bool _isShuffling = false;
@@ -133,12 +133,6 @@ class MusicProvider with ChangeNotifier {
   Future<void> _initAudioSession() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    _player.setAndroidAudioAttributes(
-      const AndroidAudioAttributes(
-        contentType: AndroidAudioContentType.music,
-        usage: AndroidAudioUsage.media,
-      ),
-    );
   }
 
   Future<void> search(String query) async {
@@ -171,17 +165,29 @@ class MusicProvider with ChangeNotifier {
         List<dynamic> items = data['items'];
         
         List<Song> newResults = items.map((item) {
-           var thumbs = item['snippet']['thumbnails'];
-           String img = thumbs['high']['url'];
-           if (thumbs.containsKey('maxres')) img = thumbs['maxres']['url'];
+           var snippet = item['snippet'];
+           var thumbs = snippet['thumbnails'];
+           
+           String img = "";
+           if (thumbs != null) {
+             if (thumbs.containsKey('maxres')) {
+               img = thumbs['maxres']['url'];
+             } else if (thumbs.containsKey('high')) {
+               img = thumbs['high']['url'];
+             } else if (thumbs.containsKey('medium')) {
+               img = thumbs['medium']['url'];
+             } else {
+               img = thumbs['default']['url'];
+             }
+           }
 
            String id = item['id']['videoId'] ?? item['id']['playlistId'];
            String kind = item['id']['kind'] == "youtube#playlist" ? 'playlist' : 'video';
 
           return Song(
             id: id,
-            title: item['snippet']['title'],
-            artist: item['snippet']['channelTitle'],
+            title: snippet['title'] ?? "Unknown Title",
+            artist: snippet['channelTitle'] ?? "Unknown Artist",
             thumbUrl: img,
             type: kind,
           );
@@ -203,45 +209,6 @@ class MusicProvider with ChangeNotifier {
     _isPlayerExpanded = true;
     _errorMessage = null; 
     await _loadAndPlay();
-  }
-
-  Future<void> playPlaylist(Song album) async {
-    await _player.stop();
-    _isMiniPlayerVisible = true;
-    _isLoadingSong = true; 
-    notifyListeners();
-    
-    try {
-      // Use the clients for playlist fetch too
-      var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
-      var videos = _yt.playlists.getVideos(playlist.id);
-      
-      List<Song> albumSongs = [];
-      await for (var video in videos) {
-        albumSongs.add(Song(
-          id: video.id.value,
-          title: video.title,
-          artist: video.author,
-          thumbUrl: video.thumbnails.highResUrl,
-          type: 'video',
-        ));
-        if (albumSongs.length >= 50) break; 
-      }
-
-      if (albumSongs.isNotEmpty) {
-        _queue = albumSongs;
-        _currentIndex = 0;
-        _isPlayerExpanded = true;
-        await _loadAndPlay();
-      } else {
-        _isLoadingSong = false;
-        notifyListeners();
-      }
-    } catch (e) {
-      _isLoadingSong = false;
-      _errorMessage = "Could not load album: $e";
-      notifyListeners();
-    }
   }
 
   Future<void> next() async {
@@ -271,16 +238,16 @@ class MusicProvider with ChangeNotifier {
     try {
       final song = _queue[_currentIndex];
       
-      // FIX 1: Try iOS, then VR, then Sdkless
+      // FIX: Use the client list with the Hexer10 fork
       var manifest = await _yt.videos.streamsClient.getManifest(
         song.id, 
         ytClients: _streamClients 
       );
       
-      // FIX 2: Accept ANY high quality audio (WebM or MP4)
+      // FIX: Trust the library to find the best audio (WebM/Opus)
       var audioStream = manifest.audioOnly.withHighestBitrate();
       
-      // FIX 3: NO HEADERS. Let the signed URL do the work.
+      // FIX: No headers needed with the Git version
       final source = AudioSource.uri(
         audioStream.url,
         tag: MediaItem(
@@ -297,9 +264,7 @@ class MusicProvider with ChangeNotifier {
       
     } catch (e) {
       print("Audio Error: $e");
-      // If we are restricted, it's likely the clients are blocked on this IP.
-      _errorMessage = "Song Restricted. Try VPN or wait.";
-      next(); 
+      _errorMessage = "Playback Error. Song might be restricted.";
     } finally {
       _isLoadingSong = false;
       notifyListeners();
@@ -310,8 +275,7 @@ class MusicProvider with ChangeNotifier {
   void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
   void togglePlayPause() { if (_player.playing) _player.pause(); else _player.play(); }
   void toggleShuffle() { _isShuffling = !_isShuffling; if (_isShuffling) _queue.shuffle(); notifyListeners(); }
-  
-  void toggleLoop() async {
+  void toggleLoop() async { 
     if (_loopMode == LoopMode.off) { 
         _loopMode = LoopMode.one; 
         await _player.setLoopMode(LoopMode.one); 
@@ -324,6 +288,5 @@ class MusicProvider with ChangeNotifier {
     }
     notifyListeners();
   }
-  
   void clearError() { _errorMessage = null; notifyListeners(); }
 }
