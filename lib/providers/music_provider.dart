@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // For Search/Proxy
+import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -9,16 +9,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import '../services/audio_handler.dart';
 
-// ====================================================================
 // DATA MODEL
-// ====================================================================
 class Song {
-  final String id;        // File Path or YouTube ID
+  final String id;
   final String title;
   final String artist;
-  final String thumbUrl;  // Empty for local
-  final String type;      // 'local' or 'video'
-  final int? localId;     // For Local Artwork
+  final String thumbUrl;
+  final String type;
+  final int? localId;
 
   Song({
     required this.id,
@@ -30,11 +28,8 @@ class Song {
   });
 }
 
-// ====================================================================
-// MUSIC PROVIDER (HYBRID)
-// ====================================================================
 class MusicProvider with ChangeNotifier {
-  late AudioHandler _audioHandler;
+  AudioHandler? _audioHandler; // Nullable to start
   final _yt = yt.YoutubeExplode();
   
   List<Song> _localSongs = [];
@@ -47,6 +42,7 @@ class MusicProvider with ChangeNotifier {
   bool _isMiniPlayerVisible = false;
   bool _isPlayerExpanded = false;
   bool _isPlaying = false;
+  bool _isInitialized = false; // New flag
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
@@ -59,32 +55,52 @@ class MusicProvider with ChangeNotifier {
   bool get isFetchingLocal => _isFetchingLocal;
   bool get isLoadingSong => _isLoadingSong;
   bool get isPlaying => _isPlaying;
+  bool get isInitialized => _isInitialized;
   Duration get position => _position;
   Duration get duration => _duration;
   
-  // Expose stream for UI
-  Stream<PlaybackState> get playbackState => _audioHandler.playbackState;
+  // Safe stream getter
+  Stream<PlaybackState>? get playbackState => _audioHandler?.playbackState;
 
+  // 1. INIT (Call this from Splash Screen)
   Future<void> init() async {
-    _audioHandler = await initAudioService();
-    _audioHandler.playbackState.listen((state) {
-      _isPlaying = state.playing;
-      _position = state.position;
+    if (_isInitialized) return;
+
+    try {
+      _audioHandler = await initAudioService();
+      
+      _audioHandler!.playbackState.listen((state) {
+        _isPlaying = state.playing;
+        _position = state.position;
+        notifyListeners();
+      });
+      
+      AudioService.position.listen((pos) {
+        _position = pos;
+        notifyListeners();
+      });
+
+      _isInitialized = true;
       notifyListeners();
-    });
-    AudioService.position.listen((pos) {
-      _position = pos;
-      notifyListeners();
-    });
-    fetchLocalSongs();
+      
+      // Now safe to fetch songs
+      await fetchLocalSongs(); 
+    } catch (e) {
+      print("Init Error: $e");
+    }
   }
 
-  // 1. LOCAL FETCH
   Future<void> fetchLocalSongs() async {
     _isFetchingLocal = true;
     notifyListeners();
     try {
-      if (await Permission.audio.request().isGranted || await Permission.storage.request().isGranted) {
+      // Request permissions safely
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.audio,
+        Permission.storage,
+      ].request();
+
+      if (statuses[Permission.audio]!.isGranted || statuses[Permission.storage]!.isGranted) {
         final OnAudioQuery audioQuery = OnAudioQuery();
         List<SongModel> songs = await audioQuery.querySongs(
           sortType: SongSortType.DATE_ADDED,
@@ -108,12 +124,11 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // 2. YOUTUBE SEARCH
+  // YOUTUBE SEARCH
   Future<void> search(String query) async {
     _searchResults = [];
     notifyListeners();
     try {
-      // Use YouTube Explode for search (Hemant Fork)
       var results = await _yt.search.getVideos(query);
       _searchResults = results.map((video) => Song(
         id: video.id.value,
@@ -126,12 +141,14 @@ class MusicProvider with ChangeNotifier {
     } catch (e) { print("Search Error: $e"); }
   }
 
-  // 3. UNIVERSAL PLAY
+  // PLAY LOGIC
   Future<void> play(Song song) async {
+    if (_audioHandler == null) return; // Safety check
+
     if (song.type == 'local') {
       _queue = _localSongs;
     } else {
-      _queue = [song]; // Simple queue for search
+      _queue = [song];
     }
     _currentIndex = _queue.indexOf(song);
     if (_currentIndex == -1) _currentIndex = 0;
@@ -143,11 +160,9 @@ class MusicProvider with ChangeNotifier {
 
     try {
       String playUrl = "";
-      
       if (song.type == 'local') {
-        playUrl = song.id; // It's a file path
+        playUrl = song.id; 
       } else {
-        // YOUTUBE EXTRACTION (Nuclear Option)
         playUrl = await _getStreamUrl(song.id); 
       }
 
@@ -159,7 +174,7 @@ class MusicProvider with ChangeNotifier {
         title: song.title,
         artist: song.artist,
         artUri: song.type == 'video' ? Uri.parse(song.thumbUrl) : null,
-        extras: {'localId': song.localId}, // Pass ID for local art
+        extras: {'localId': song.localId},
       );
 
       await (_audioHandler as MyAudioHandler).playMediaItem(mediaItem);
@@ -174,13 +189,11 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<String> _getStreamUrl(String id) async {
-    // 1. Try Hemant's Library
     try {
       var manifest = await _yt.videos.streamsClient.getManifest(id);
       return manifest.audioOnly.withHighestBitrate().url.toString();
     } catch (e) { print("Lib failed, trying proxy..."); }
     
-    // 2. Try LemnosLife (Proxy)
     try {
       var res = await http.get(Uri.parse('https://yt.lemnoslife.com/videos?part=streaming&id=$id'));
       var data = jsonDecode(res.body);
@@ -191,10 +204,10 @@ class MusicProvider with ChangeNotifier {
     return "";
   }
 
-  // CONTROLS
   void togglePlayPause() {
-    if (_isPlaying) _audioHandler.pause();
-    else _audioHandler.play();
+    if (_audioHandler == null) return;
+    if (_isPlaying) _audioHandler!.pause();
+    else _audioHandler!.play();
   }
   
   void next() {
@@ -208,7 +221,7 @@ class MusicProvider with ChangeNotifier {
     if (_currentIndex > 0) play(_queue[_currentIndex - 1]);
   }
 
-  void seek(Duration pos) => _audioHandler.seek(pos);
+  void seek(Duration pos) => _audioHandler?.seek(pos);
   void togglePlayerView() { _isPlayerExpanded = !_isPlayerExpanded; notifyListeners(); }
   void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
 }
