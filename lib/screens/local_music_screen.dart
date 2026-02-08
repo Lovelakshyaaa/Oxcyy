@@ -48,15 +48,27 @@ class LocalMusicScreen extends StatelessWidget {
                     final song = provider.localSongs[index];
                     return ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      // ⚠️ THE FIX: Robust Album Art Handling ⚠️
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: QueryArtworkWidget(
-                          id: song.localId!,
-                          type: ArtworkType.AUDIO,
-                          nullArtworkWidget: Container(
-                            width: 50, height: 50,
-                            color: Colors.white10,
-                            child: Icon(Icons.music_note, color: Colors.white),
+                        child: SizedBox(
+                          width: 50, 
+                          height: 50,
+                          child: QueryArtworkWidget(
+                            id: song.localId!,
+                            type: ArtworkType.AUDIO,
+                            keepOldArtwork: true, // Prevents flickering
+                            nullArtworkWidget: Container(
+                              color: Colors.white10,
+                              child: Icon(Icons.music_note, color: Colors.white),
+                            ),
+                            errorBuilder: (context, exception, stackTrace) {
+                              // Fallback if artwork fails to load
+                              return Container(
+                                color: Colors.white10,
+                                child: Icon(Icons.music_note, color: Colors.white),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -72,7 +84,7 @@ class LocalMusicScreen extends StatelessWidget {
                         style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)
                       ),
                       onTap: () {
-                        // FIX: Changed playLocal(song) to play(song)
+                        // Plays the song (Provider handles logic)
                         provider.play(song);
                       },
                     );
