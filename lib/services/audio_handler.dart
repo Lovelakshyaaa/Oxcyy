@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:audio_session/audio_session.dart';
+// NO audio_session import needed anymore.
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -16,43 +16,13 @@ Future<AudioHandler> initAudioService() async {
 }
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
-  final _player = AudioPlayer(
-    audioLoadConfiguration: const AudioLoadConfiguration(
-      androidLoadControl: AndroidLoadControl(
-        maxBufferDuration: Duration(seconds: 60),
-        bufferForPlaybackDuration: Duration(milliseconds: 500),
-        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
-      ),
-    ),
-  );
+  final _player = AudioPlayer(); // Standard player, no fancy config
 
   MyAudioHandler() {
-    _init();
-    _listenToEvents();
-  }
-
-  Future<void> _init() async {
-    try {
-      // 1. SETUP SESSION
-      final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration.music());
-
-      // 2. SET ATTRIBUTES
-      await _player.setAndroidAudioAttributes(
-        AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.music,
-          usage: AndroidAudioUsage.media,
-        ),
-      );
-    } catch (e) {
-      print("Audio Init Failed: $e");
-      // We continue anyway, so the player object still exists
-    }
-  }
-
-  void _listenToEvents() {
+    // Just listen to events. No setup. No config.
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
+    // Fix duration for slider
     _player.durationStream.listen((duration) {
       if (duration != null) {
         final currentItem = mediaItem.value;
@@ -82,6 +52,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
       if (item.id.startsWith('http')) {
         await _player.setUrl(item.id);
       } else {
+        // Simple URI source for local files
         await _player.setAudioSource(AudioSource.uri(Uri.file(item.id)));
       }
       await _player.play();
