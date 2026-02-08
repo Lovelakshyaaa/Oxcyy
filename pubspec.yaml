@@ -16,28 +16,23 @@ dependencies:
   permission_handler: ^11.3.1
   rxdart: ^0.27.7
 
-  # UI
+  # UI & DESIGN
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   cached_network_image: ^3.4.1
+  glassmorphism: ^3.0.0            # <--- RESTORED!
+  fluentui_system_icons: ^1.1.225  # Useful for modern icons
   
   # STATE
   provider: ^6.1.5+1
 
-  # 🎵 THE MUSIFY ENGINE (MATCHED)
-  # 1. The Player (Upgraded to Musify's version)
+  # 🎵 AUDIO ENGINE
   just_audio: ^0.10.5
-  
-  # 2. Audio Service (Manual handling, no "background" wrapper)
   audio_service: ^0.18.18
-  
-  # 3. Audio Session (For focus handling)
   audio_session: ^0.1.21
-
-  # 4. Local Files
   on_audio_query: ^2.9.0
   
-  # 5. YouTube Extractor (Hemant's Fork - Keep this for online later)
+  # YOUTUBE (Hemant's Fork)
   youtube_explode_dart:
     git:
       url: https://github.com/HemantKArya/youtube_explode_dart.git
