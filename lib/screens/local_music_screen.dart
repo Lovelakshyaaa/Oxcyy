@@ -72,7 +72,8 @@ class LocalMusicScreen extends StatelessWidget {
                         style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)
                       ),
                       onTap: () {
-                        provider.playLocal(song);
+                        // FIX: Changed playLocal(song) to play(song)
+                        provider.play(song);
                       },
                     );
                   },
