@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:glassmorphism/glassmorphism.dart'; // For the requested UI
+import 'package:glassmorphism/glassmorphism.dart';
 import 'package:oxcy/providers/music_provider.dart';
 
 class SmartPlayer extends StatelessWidget {
@@ -36,9 +36,7 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // -----------------------------------------------------------
-  // HELPER: ARTWORK BUILDER (High Res Fix)
-  // -----------------------------------------------------------
+  // ARTWORK BUILDER (High Res Fix)
   Widget _buildArtwork(Song song, double size, {bool highRes = false}) {
     if (song.type == 'local' && song.localId != null) {
       return SizedBox(
@@ -47,8 +45,8 @@ class SmartPlayer extends StatelessWidget {
           id: song.localId!,
           type: ArtworkType.AUDIO,
           keepOldArtwork: true,
-          // FIX: Request High Quality & Large Size
-          artworkQuality: highRes ? FilterQuality.high : FilterQuality.low,
+          // ⚠️ THE FIX FOR BLURRY ART ⚠️
+          artworkQuality: FilterQuality.high,
           artworkHeight: highRes ? 1000 : 200,
           artworkWidth: highRes ? 1000 : 200,
           nullArtworkWidget: Container(
@@ -73,7 +71,7 @@ class SmartPlayer extends StatelessWidget {
       onTap: provider.togglePlayerView, 
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16),
-        color: Colors.transparent, // Let background show
+        color: Colors.transparent,
         child: Row(
           children: [
             ClipRRect(
@@ -103,13 +101,13 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // FULL SCREEN (With Glassmorphism)
+  // FULL SCREEN
   Widget _buildFullScreen(BuildContext context, MusicProvider provider, Song song) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // 1. Blurry Background Image
+          // Background
           Positioned.fill(child: _buildArtwork(song, double.infinity, highRes: true)),
           Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
           
@@ -125,7 +123,7 @@ class SmartPlayer extends StatelessWidget {
                 ),
                 Spacer(),
                 
-                // 2. Big Artwork (Crystal Clear)
+                // Big Artwork
                 Container(
                   width: 300, height: 300,
                   decoration: BoxDecoration(
@@ -134,13 +132,13 @@ class SmartPlayer extends StatelessWidget {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20), 
-                    child: _buildArtwork(song, 300, highRes: true) // HIGH RES FLAG ON
+                    child: _buildArtwork(song, 300, highRes: true)
                   ),
                 ),
                 
                 SizedBox(height: 40),
                 
-                // 3. Glass Control Panel
+                // Glass Panel
                 GlassmorphicContainer(
                   width: MediaQuery.of(context).size.width * 0.9,
                   height: 180,
@@ -158,7 +156,7 @@ class SmartPlayer extends StatelessWidget {
                       
                       SizedBox(height: 10),
                       
-                      // Slider & Duration
+                      // Slider
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -183,7 +181,7 @@ class SmartPlayer extends StatelessWidget {
                 
                 SizedBox(height: 20),
                 
-                // 4. Controls
+                // Controls
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
