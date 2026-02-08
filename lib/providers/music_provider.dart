@@ -29,7 +29,7 @@ class Song {
 }
 
 class MusicProvider with ChangeNotifier {
-  AudioHandler? _audioHandler; // Nullable to start
+  AudioHandler? _audioHandler;
   final _yt = yt.YoutubeExplode();
   
   List<Song> _localSongs = [];
@@ -42,7 +42,7 @@ class MusicProvider with ChangeNotifier {
   bool _isMiniPlayerVisible = false;
   bool _isPlayerExpanded = false;
   bool _isPlaying = false;
-  bool _isInitialized = false; // New flag
+  bool _isInitialized = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
@@ -59,13 +59,11 @@ class MusicProvider with ChangeNotifier {
   Duration get position => _position;
   Duration get duration => _duration;
   
-  // Safe stream getter
   Stream<PlaybackState>? get playbackState => _audioHandler?.playbackState;
 
-  // 1. INIT (Call this from Splash Screen)
+  // INIT
   Future<void> init() async {
     if (_isInitialized) return;
-
     try {
       _audioHandler = await initAudioService();
       
@@ -82,8 +80,6 @@ class MusicProvider with ChangeNotifier {
 
       _isInitialized = true;
       notifyListeners();
-      
-      // Now safe to fetch songs
       await fetchLocalSongs(); 
     } catch (e) {
       print("Init Error: $e");
@@ -94,7 +90,6 @@ class MusicProvider with ChangeNotifier {
     _isFetchingLocal = true;
     notifyListeners();
     try {
-      // Request permissions safely
       Map<Permission, PermissionStatus> statuses = await [
         Permission.audio,
         Permission.storage,
@@ -124,7 +119,7 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // YOUTUBE SEARCH
+  // SEARCH
   Future<void> search(String query) async {
     _searchResults = [];
     notifyListeners();
@@ -141,10 +136,11 @@ class MusicProvider with ChangeNotifier {
     } catch (e) { print("Search Error: $e"); }
   }
 
-  // PLAY LOGIC
+  // PLAY (FORCE UI UPDATE)
   Future<void> play(Song song) async {
-    if (_audioHandler == null) return; // Safety check
+    if (_audioHandler == null) return;
 
+    // 1. Setup Queue
     if (song.type == 'local') {
       _queue = _localSongs;
     } else {
@@ -153,10 +149,11 @@ class MusicProvider with ChangeNotifier {
     _currentIndex = _queue.indexOf(song);
     if (_currentIndex == -1) _currentIndex = 0;
 
+    // 2. FORCE UI TO SHOW IMMEDIATELY
     _isMiniPlayerVisible = true;
     _isPlayerExpanded = true;
     _isLoadingSong = true;
-    notifyListeners();
+    notifyListeners(); // <--- Update UI NOW
 
     try {
       String playUrl = "";
@@ -193,14 +190,12 @@ class MusicProvider with ChangeNotifier {
       var manifest = await _yt.videos.streamsClient.getManifest(id);
       return manifest.audioOnly.withHighestBitrate().url.toString();
     } catch (e) { print("Lib failed, trying proxy..."); }
-    
     try {
       var res = await http.get(Uri.parse('https://yt.lemnoslife.com/videos?part=streaming&id=$id'));
       var data = jsonDecode(res.body);
       return data['items'][0]['streamingData']['adaptiveFormats']
           .firstWhere((f) => f['mimeType'].contains('audio/mp4'))['url'];
     } catch (e) { print("Proxy failed"); }
-    
     return "";
   }
 
