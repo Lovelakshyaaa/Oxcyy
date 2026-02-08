@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math'; // Required for pow
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'package:on_audio_query/on_audio_query.dart'; // REQUIRED for Local
-import 'package:permission_handler/permission_handler.dart'; // REQUIRED for Permissions
+import 'package:on_audio_query/on_audio_query.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 // ====================================================================
 // DATA MODEL
@@ -17,7 +18,7 @@ class Song {
   final String id;        // YouTube ID or Local File Path
   final String title;
   final String artist;
-  final String thumbUrl;  // URL for YouTube, or Empty for Local (Handled by UI)
+  final String thumbUrl;  // URL for YouTube, or Empty for Local
   final String type;      // 'video', 'playlist', or 'local'
   final int? localId;     // For fetching local album art
 
@@ -32,7 +33,7 @@ class Song {
 }
 
 // ====================================================================
-// MUSIC PROVIDER
+// MUSIC PROVIDER (MERGED ENGINE)
 // ====================================================================
 
 class MusicProvider with ChangeNotifier {
@@ -40,7 +41,7 @@ class MusicProvider with ChangeNotifier {
   
   final _player = AudioPlayer();
   final _yt = yt.YoutubeExplode(); 
-  final _audioQuery = OnAudioQuery(); // Local File Scanner
+  final _audioQuery = OnAudioQuery();
 
   // Lists
   List<Song> _searchResults = [];
@@ -49,6 +50,9 @@ class MusicProvider with ChangeNotifier {
   
   // State
   int _currentIndex = -1;
+  String? _nextPageToken;
+  String _currentQuery = "";
+  bool _isFetchingMore = false; // RESTORED
   bool _isLoadingSong = false;
   bool _isFetchingLocal = false;
   String? _errorMessage;
@@ -56,8 +60,8 @@ class MusicProvider with ChangeNotifier {
   // Player State
   bool _isMiniPlayerVisible = false;
   bool _isPlayerExpanded = false;
-  bool _isShuffling = false;
-  LoopMode _loopMode = LoopMode.off;
+  bool _isShuffling = false; // RESTORED
+  LoopMode _loopMode = LoopMode.off; // RESTORED
 
   // Getters
   AudioPlayer get player => _player;
@@ -73,13 +77,14 @@ class MusicProvider with ChangeNotifier {
   bool get isShuffling => _isShuffling;
   LoopMode get loopMode => _loopMode;
   bool get isLoadingSong => _isLoadingSong;
+  bool get isFetchingMore => _isFetchingMore; // RESTORED
   bool get isFetchingLocal => _isFetchingLocal;
   String? get errorMessage => _errorMessage;
 
   MusicProvider() {
     _initAudioSession();
     _setupPlayerListeners();
-    fetchLocalSongs(); // Auto-load on start
+    fetchLocalSongs(); // Auto-load local music
   }
 
   Future<void> _initAudioSession() async {
@@ -94,10 +99,20 @@ class MusicProvider with ChangeNotifier {
       }
       notifyListeners();
     });
+
+    _player.playbackEventStream.listen((event) {}, 
+      onError: (Object e, StackTrace stackTrace) {
+      print('PLAYER STREAM ERROR: $e');
+      _errorMessage = "Playback Error. Skipping...";
+      notifyListeners();
+      Timer(const Duration(seconds: 3), () {
+        if (_queue.isNotEmpty) next();
+      });
+    });
   }
 
   // ====================================================================
-  // 1. LOCAL AUDIO LOGIC (The New Home Feature)
+  // 1. LOCAL AUDIO LOGIC
   // ====================================================================
 
   Future<void> fetchLocalSongs() async {
@@ -105,12 +120,9 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Request Permission
-      // Android 13+ needs READ_MEDIA_AUDIO, Older needs READ_EXTERNAL_STORAGE
       if (await Permission.audio.request().isGranted || 
           await Permission.storage.request().isGranted) {
         
-        // 2. Query Files
         List<SongModel> songs = await _audioQuery.querySongs(
           sortType: SongSortType.DATE_ADDED,
           orderType: OrderType.DESC_OR_GREATER,
@@ -118,15 +130,14 @@ class MusicProvider with ChangeNotifier {
           ignoreCase: true,
         );
 
-        // 3. Map to our Song Model
         _localSongs = songs.map((item) {
           return Song(
-            id: item.data, // Stores the File Path!
+            id: item.data, // File Path
             title: item.title,
             artist: item.artist ?? "Unknown Artist",
-            thumbUrl: "", // Local art is handled by ID
+            thumbUrl: "", 
             type: 'local',
-            localId: item.id, // Needed for artwork query
+            localId: item.id,
           );
         }).toList();
       }
@@ -138,120 +149,289 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> playLocal(Song song) async {
-    await _player.stop();
-    _queue = _localSongs; // Set queue to all local songs
-    _currentIndex = _localSongs.indexOf(song);
-    _isMiniPlayerVisible = true;
-    _isPlayerExpanded = true;
-    _errorMessage = null;
+  // ====================================================================
+  // 2. STREAMING SEARCH & PAGINATION (RESTORED)
+  // ====================================================================
 
+  Future<void> search(String query) async {
+    _currentQuery = query;
+    _searchResults = [];
+    _nextPageToken = null;
+    notifyListeners();
+    await _fetchPage();
+  }
+
+  // RESTORED: loadMore method
+  Future<void> loadMore() async {
+    if (_isFetchingMore || _nextPageToken == null) return;
+    _isFetchingMore = true;
+    notifyListeners();
+    await _fetchPage();
+    _isFetchingMore = false;
+    notifyListeners();
+  }
+
+  Future<void> _fetchPage() async {
     try {
-      final source = AudioSource.uri(
-        Uri.parse(song.id), // song.id IS the file path
-        tag: MediaItem(
-          id: song.localId.toString(),
-          album: "Local Music",
-          title: song.title,
-          artist: song.artist,
-          artUri: null, // Placeholder
-        ),
-      );
+      String url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$_currentQuery&type=video,playlist&maxResults=20&key=$_apiKey';
+      if (_nextPageToken != null) url += "&pageToken=$_nextPageToken";
+
+      final response = await http.get(Uri.parse(url));
       
-      await _player.setAudioSource(source);
-      _player.play();
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        _nextPageToken = data['nextPageToken'];
+        List<dynamic> items = data['items'];
+        
+        List<Song> newResults = items.map((item) {
+          var snippet = item['snippet'];
+          var thumbs = snippet['thumbnails'];
+          String img = "";
+          if (thumbs != null) {
+             if (thumbs.containsKey('maxres')) img = thumbs['maxres']['url'];
+             else if (thumbs.containsKey('high')) img = thumbs['high']['url'];
+             else if (thumbs.containsKey('medium')) img = thumbs['medium']['url'];
+             else img = thumbs['default']['url'];
+          }
+          String id = item['id']['videoId'] ?? item['id']['playlistId'];
+          String kind = item['id']['kind'] == "youtube#playlist" ? 'playlist' : 'video';
+          
+          return Song(
+            id: id,
+            title: snippet['title'] ?? "Unknown Title",
+            artist: snippet['channelTitle'] ?? "Unknown Artist",
+            thumbUrl: img,
+            type: kind,
+          );
+        }).toList();
+        
+        _searchResults.addAll(newResults);
+        notifyListeners();
+      }
     } catch (e) {
-      _errorMessage = "Could not play file.";
-      notifyListeners();
+      print("Search Error: $e");
     }
   }
 
   // ====================================================================
-  // 2. STREAMING LOGIC (The Search Feature)
+  // 3. UNIFIED PLAYBACK LOGIC (RESTORED & MERGED)
   // ====================================================================
 
-  Future<void> search(String query) async {
-    // ... (Keep your existing search logic) ...
-    // For brevity, I assume you kept the search logic from previous steps.
-    // If not, I can repaste it, but we focus on Local now.
-    
-    // SIMPLE SEARCH IMPLEMENTATION
-    try {
-      _searchResults = [];
-      notifyListeners();
-      String url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$query&type=video&maxResults=20&key=$_apiKey';
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        List<dynamic> items = data['items'];
-        _searchResults = items.map((item) {
-          return Song(
-            id: item['id']['videoId'],
-            title: item['snippet']['title'],
-            artist: item['snippet']['channelTitle'],
-            thumbUrl: item['snippet']['thumbnails']['high']['url'],
-            type: 'video',
-          );
-        }).toList();
-        notifyListeners();
-      }
-    } catch(e) { print(e); }
-  }
-
-  Future<void> playStream(Song song) async {
-    // ... (The Cobalt/Lemnos Logic) ...
-    // This is called from the Search Screen
+  // RESTORED: play(Song) - Handles both Local and Stream
+  Future<void> play(Song song) async {
     await _player.stop();
-    _queue = [song];
-    _currentIndex = 0;
+    
+    // If local, set queue to all local songs for continuous play
+    if (song.type == 'local') {
+      _queue = _localSongs;
+      _currentIndex = _localSongs.indexOf(song);
+    } else {
+      // If stream, just play this one (queueing logic can be expanded)
+      _queue = [song];
+      _currentIndex = 0;
+    }
+
     _isMiniPlayerVisible = true;
     _isPlayerExpanded = true;
+    _errorMessage = null;
     
-    // Quick Cobalt Implementation for completeness
+    await _loadAndPlayCurrent();
+  }
+
+  // RESTORED: playPlaylist(Song)
+  Future<void> playPlaylist(Song album) async {
+    await _player.stop();
+    _isMiniPlayerVisible = true;
+    _isLoadingSong = true;
+    notifyListeners();
+
     try {
-       final response = await http.post(
-        Uri.parse('https://cobalt.gamemonk.net/api/json'),
-        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
-        body: jsonEncode({'url': 'https://www.youtube.com/watch?v=${song.id}', 'isAudioOnly': true})
-      );
-      final data = jsonDecode(response.body);
-      if (data['url'] != null) {
-        await _player.setAudioSource(AudioSource.uri(Uri.parse(data['url']), tag: MediaItem(id: song.id, title: song.title, artist: song.artist)));
+      var playlist = await _yt.playlists.get(yt.PlaylistId(album.id));
+      var videos = _yt.playlists.getVideos(playlist.id);
+
+      List<Song> albumSongs = [];
+      await for (var video in videos) {
+        albumSongs.add(Song(
+          id: video.id.value,
+          title: video.title,
+          artist: video.author,
+          thumbUrl: video.thumbnails.highResUrl,
+          type: 'video',
+        ));
+        if (albumSongs.length >= 50) break;
+      }
+
+      if (albumSongs.isNotEmpty) {
+        _queue = albumSongs;
+        _currentIndex = 0;
+        _isPlayerExpanded = true;
+        await _loadAndPlayCurrent();
+      } else {
+        _isLoadingSong = false;
+        notifyListeners();
+      }
+    } catch (e) {
+      _isLoadingSong = false;
+      _errorMessage = "Could not load playlist.";
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadAndPlayCurrent() async {
+    if (_queue.isEmpty || _currentIndex < 0) return;
+
+    final song = _queue[_currentIndex];
+    _isLoadingSong = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      // CASE 1: LOCAL MUSIC
+      if (song.type == 'local') {
+        print('Playing Local File: ${song.id}');
+        final source = AudioSource.uri(
+          Uri.parse(song.id),
+          tag: MediaItem(
+            id: song.localId.toString(),
+            album: "Local Music",
+            title: song.title,
+            artist: song.artist,
+          ),
+        );
+        await _player.setAudioSource(source);
+        _player.play();
+      } 
+      // CASE 2: STREAMING (Use Proxy-First Logic)
+      else {
+        print('Fetching Stream URL for: ${song.title}');
+        final streamUrl = await _getStreamUrl(song.id);
+        
+        if (streamUrl == null) throw Exception("No stream found.");
+
+        final source = AudioSource.uri(
+          Uri.parse(streamUrl),
+          headers: {
+             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          },
+          tag: MediaItem(
+            id: song.id,
+            album: "OXCY Music",
+            title: song.title,
+            artist: song.artist,
+            artUri: Uri.parse(song.thumbUrl),
+          ),
+        );
+        await _player.setAudioSource(source);
         _player.play();
       }
-    } catch (e) { _errorMessage = "Stream Error"; notifyListeners(); }
+      
+      _isLoadingSong = false;
+      notifyListeners();
+
+    } catch (e) {
+      print("Playback Error: $e");
+      _isLoadingSong = false;
+      _errorMessage = "Playback Failed.";
+      notifyListeners();
+      Timer(const Duration(seconds: 2), () {
+        if (_queue.isNotEmpty) next();
+      });
+    }
+  }
+
+  // --- STREAM EXTRACTOR (Lemnos/Cobalt) ---
+  Future<String?> _getStreamUrl(String videoId) async {
+    try {
+      // Lemnos
+      final response = await http.get(Uri.parse('https://yt.lemnoslife.com/videos?part=streaming&id=$videoId')).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['items'] != null && data['items'].isNotEmpty) {
+           final streamingData = data['items'][0]['streamingData'];
+           if (streamingData != null) {
+              List<dynamic> formats = [];
+              if (streamingData['formats'] != null) formats.addAll(streamingData['formats']);
+              if (streamingData['adaptiveFormats'] != null) formats.addAll(streamingData['adaptiveFormats']);
+              
+              var audio = formats.firstWhere((f) => f['mimeType'].toString().contains('audio/mp4'), orElse: () => null);
+              audio ??= formats.firstWhere((f) => f['mimeType'].toString().contains('audio'), orElse: () => null);
+              
+              if (audio != null) return audio['url'];
+           }
+        }
+      }
+    } catch (e) { print(e); }
+
+    try {
+      // Cobalt
+      final response = await http.post(
+        Uri.parse('https://cobalt.gamemonk.net/api/json'),
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        body: jsonEncode({'url': 'https://www.youtube.com/watch?v=$videoId', 'isAudioOnly': true})
+      ).timeout(const Duration(seconds: 4));
+      final data = json.decode(response.body);
+      if (data['url'] != null) return data['url'];
+    } catch (e) { print(e); }
+
+    return null;
   }
 
   // ====================================================================
-  // 3. CONTROLS
+  // 4. CONTROLS (RESTORED)
   // ====================================================================
-  
+
   Future<void> next() async {
     if (_queue.isEmpty) return;
     if (_currentIndex < _queue.length - 1) {
       _currentIndex++;
-      if (_queue[_currentIndex].type == 'local') {
-        playLocal(_queue[_currentIndex]);
-      } else {
-        playStream(_queue[_currentIndex]);
-      }
+    } else {
+      if (_loopMode == LoopMode.all) _currentIndex = 0;
+      else { await _player.stop(); _isMiniPlayerVisible = false; notifyListeners(); return; }
     }
+    await _loadAndPlayCurrent();
   }
 
   Future<void> previous() async {
     if (_queue.isEmpty) return;
-    if (_currentIndex > 0) {
-      _currentIndex--;
-      if (_queue[_currentIndex].type == 'local') {
-        playLocal(_queue[_currentIndex]);
+    if (_player.position.inSeconds > 3) await _player.seek(Duration.zero);
+    else if (_currentIndex > 0) { _currentIndex--; await _loadAndPlayCurrent(); }
+  }
+
+  // RESTORED: Toggle Shuffle
+  void toggleShuffle() {
+    _isShuffling = !_isShuffling;
+    if (_isShuffling) {
+      if (_currentIndex > 0) {
+        Song current = _queue[_currentIndex];
+        List<Song> others = List.from(_queue)..removeAt(_currentIndex);
+        others.shuffle();
+        _queue = [current] + others;
+        _currentIndex = 0;
       } else {
-        playStream(_queue[_currentIndex]);
+        _queue.shuffle();
+      }
+    } else {
+      // Note: Unshuffling accurately requires saving original list, 
+      // but for now we just toggle the flag.
+      if (currentSong?.type == 'local') {
+         _queue = List.from(_localSongs);
+         if (currentSong != null) _currentIndex = _queue.indexWhere((s) => s.id == currentSong!.id);
       }
     }
+    notifyListeners();
+  }
+
+  // RESTORED: Toggle Loop
+  void toggleLoop() async { 
+    if (_loopMode == LoopMode.off) { _loopMode = LoopMode.one; await _player.setLoopMode(LoopMode.one); }
+    else if (_loopMode == LoopMode.one) { _loopMode = LoopMode.all; await _player.setLoopMode(LoopMode.all); }
+    else { _loopMode = LoopMode.off; await _player.setLoopMode(LoopMode.off); }
+    notifyListeners(); 
   }
 
   void togglePlayerView() { _isPlayerExpanded = !_isPlayerExpanded; notifyListeners(); }
   void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
   void togglePlayPause() { if (_player.playing) _player.pause(); else _player.play(); }
   void clearError() { _errorMessage = null; notifyListeners(); }
+  void dispose() { _player.dispose(); super.dispose(); }
 }
