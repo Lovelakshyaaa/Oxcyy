@@ -2,23 +2,22 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:glassmorphism/glassmorphism.dart'; // The Glass Effect
+import 'package:glassmorphism/glassmorphism.dart'; 
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/local_music_screen.dart';
-import 'package:oxcy/screens/home_screen.dart'; // The Search Screen
-import 'package:oxcy/screens/player_screen.dart'; // The Player
+import 'package:oxcy/screens/home_screen.dart'; 
+import 'package:oxcy/screens/player_screen.dart';
+import 'package:oxcy/screens/splash_screen.dart'; // Import Splash
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 1. Initialize the Engine
-  final musicProvider = MusicProvider();
-  await musicProvider.init(); 
-
+  // REMOVED await musicProvider.init() -- MOVED TO SPLASH SCREEN
+  
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: musicProvider),
+        ChangeNotifierProvider(create: (_) => MusicProvider()),
       ],
       child: MyApp(),
     ),
@@ -32,14 +31,15 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'OXCY',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.transparent, // Important for glass
+        scaffoldBackgroundColor: Colors.transparent, 
         textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
       ),
-      home: MainScaffold(),
+      home: SplashScreen(), // Starts here safely
     );
   }
 }
 
+// ... MainScaffold class remains the same ...
 class MainScaffold extends StatefulWidget {
   @override
   _MainScaffoldState createState() => _MainScaffoldState();
@@ -48,21 +48,17 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
   
-  // The two main screens
   final List<Widget> _pages = [
-    LocalMusicScreen(), // Index 0: My Music
-    HomeScreen(),       // Index 1: Search
+    LocalMusicScreen(), 
+    HomeScreen(),       
   ];
 
   @override
   Widget build(BuildContext context) {
-    // We use a Stack to layer the Background -> Content -> Player -> Glass Nav
     return Scaffold(
-      backgroundColor: Color(0xFF0F0C29), // Deep base color
+      backgroundColor: Color(0xFF0F0C29), 
       body: Stack(
         children: [
-          // 1. THE AMBIENT BACKGROUND
-          // A rich gradient that makes the glass effect pop
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -77,22 +73,17 @@ class _MainScaffoldState extends State<MainScaffold> {
             ),
           ),
           
-          // 2. THE PAGE CONTENT
-          // IndexedStack keeps the state of both pages alive
           IndexedStack(
             index: _currentIndex,
             children: _pages,
           ),
           
-          // 3. THE SMART PLAYER (Miniplayer)
-          // Sits above the Nav Bar
           Positioned(
             left: 0, right: 0, 
-            bottom: 85, // Push it up so it doesn't hide behind the Nav Bar
+            bottom: 85, 
             child: SmartPlayer(),
           ),
 
-          // 4. THE GLASS NAVIGATION BAR
           Positioned(
             left: 0, right: 0, bottom: 0,
             child: _buildGlassNavBar(),
@@ -106,7 +97,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     return GlassmorphicContainer(
       width: double.infinity,
       height: 85,
-      borderRadius: 0, // Flat bottom
+      borderRadius: 0,
       blur: 20,
       alignment: Alignment.center,
       border: 0,
@@ -127,7 +118,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         ],
       ),
       child: BottomNavigationBar(
-        backgroundColor: Colors.transparent, // Let the glass show through
+        backgroundColor: Colors.transparent, 
         elevation: 0,
         currentIndex: _currentIndex,
         selectedItemColor: Colors.purpleAccent,
