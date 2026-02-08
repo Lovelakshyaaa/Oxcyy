@@ -41,7 +41,9 @@ class MusicProvider with ChangeNotifier {
   bool _isPlayerExpanded = false;
   bool _isPlaying = false;
   bool _isInitialized = false;
-  bool _isBuffering = false; // Real loading state
+  
+  // Real buffering state
+  bool _isBuffering = false; 
 
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
@@ -69,26 +71,27 @@ class MusicProvider with ChangeNotifier {
     try {
       _audioHandler = await initAudioService();
       
-      // LISTEN TO PLAYBACK STATE (Buffering, Playing, etc)
+      // 1. LISTEN TO STATE (Playing/Buffering)
       _audioHandler!.playbackState.listen((state) {
         _isPlaying = state.playing;
         _position = state.position;
         
-        // Check if we are loading/buffering
+        // This is where the spinner magic happens
         _isBuffering = state.processingState == AudioProcessingState.loading || 
                        state.processingState == AudioProcessingState.buffering;
         
         notifyListeners();
       });
       
-      // LISTEN TO MEDIA ITEM (Duration updates)
+      // 2. LISTEN TO DURATION (Fixes 0:00 bug)
       _audioHandler!.mediaItem.listen((item) {
-        if (item != null) {
-          _duration = item.duration ?? Duration.zero;
+        if (item?.duration != null) {
+          _duration = item!.duration!;
           notifyListeners();
         }
       });
       
+      // 3. LISTEN TO POSITION (Slider movement)
       AudioService.position.listen((pos) {
         _position = pos;
         notifyListeners();
@@ -159,6 +162,8 @@ class MusicProvider with ChangeNotifier {
 
     _isMiniPlayerVisible = true;
     _isPlayerExpanded = true;
+    // We set this true initially, but the stream listener controls it after
+    _isBuffering = true; 
     notifyListeners();
 
     try {
@@ -181,10 +186,11 @@ class MusicProvider with ChangeNotifier {
       );
 
       await (_audioHandler as MyAudioHandler).playMediaItem(mediaItem);
-      // Removed manual isLoading = false, handled by stream listener now
 
     } catch (e) {
       print("Play Error: $e");
+      _isBuffering = false;
+      notifyListeners();
     }
   }
 
