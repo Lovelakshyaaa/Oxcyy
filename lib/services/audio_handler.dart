@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:audio_session/audio_session.dart'; // ⚠️ THIS FIXES THE BUILD ERROR
+import 'package:audio_session/audio_session.dart';
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -16,7 +16,6 @@ Future<AudioHandler> initAudioService() async {
 }
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
-  // Configure buffer to prevent stuttering
   final _player = AudioPlayer(
     audioLoadConfiguration: const AudioLoadConfiguration(
       androidLoadControl: AndroidLoadControl(
@@ -32,26 +31,28 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     _listenToEvents();
   }
 
-  void _init() async {
-    // 1. GLOBAL SESSION CONFIG (Required for Android 15)
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
+  Future<void> _init() async {
+    try {
+      // 1. SETUP SESSION
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
 
-    // 2. PLAYER ATTRIBUTES (The "Undefined Name" Fix)
-    // We explicitly set this so Android knows it's MEDIA, not a notification.
-    await _player.setAndroidAudioAttributes(
-      AndroidAudioAttributes( // No 'const' here
-        contentType: AndroidAudioContentType.music,
-        usage: AndroidAudioUsage.media,
-      ),
-    );
+      // 2. SET ATTRIBUTES
+      await _player.setAndroidAudioAttributes(
+        AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.music,
+          usage: AndroidAudioUsage.media,
+        ),
+      );
+    } catch (e) {
+      print("Audio Init Failed: $e");
+      // We continue anyway, so the player object still exists
+    }
   }
 
   void _listenToEvents() {
-    // Broadcast State
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
-    // Broadcast Duration (Fixes 0:00 bug)
     _player.durationStream.listen((duration) {
       if (duration != null) {
         final currentItem = mediaItem.value;
@@ -79,10 +80,8 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(item);
     try {
       if (item.id.startsWith('http')) {
-        // Online Stream
         await _player.setUrl(item.id);
       } else {
-        // Local File: Android 15 requires Uri.file scheme
         await _player.setAudioSource(AudioSource.uri(Uri.file(item.id)));
       }
       await _player.play();
