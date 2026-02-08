@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -17,7 +18,17 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   final _player = AudioPlayer();
 
   MyAudioHandler() {
+    // 1. Broadcast Playback State (Playing/Paused/Buffering)
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+
+    // 2. Broadcast Media Item Updates (Duration!)
+    // This fixes the "No Duration" bug
+    _player.durationStream.listen((duration) {
+      if (duration != null && mediaItem.value != null) {
+        final newMediaItem = mediaItem.value!.copyWith(duration: duration);
+        mediaItem.add(newMediaItem);
+      }
+    });
   }
 
   @override
@@ -32,16 +43,18 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() => _player.stop();
 
+  @override
   Future<void> playMediaItem(MediaItem item) async {
     mediaItem.add(item);
     try {
-      // ⚠️ HYBRID LOGIC: Check if it's a URL or a File
+      // ⚠️ ROBUST HYBRID LOGIC
       if (item.id.startsWith('http')) {
-        // It's YouTube/Stream
-        await _player.setUrl(item.id); 
+        // Online (YouTube)
+        await _player.setUrl(item.id);
       } else {
-        // It's Local
-        await _player.setFilePath(item.id);
+        // Local File - The Fix for "Nothing Plays"
+        // usage of Uri.file ensures correct scheme handling on Android
+        await _player.setAudioSource(AudioSource.uri(Uri.file(item.id)));
       }
       await _player.play();
     } catch (e) {
