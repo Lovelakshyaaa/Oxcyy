@@ -15,7 +15,7 @@ Future<AudioHandler> initAudioService() async {
 }
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
-  // 1. ADVANCED PLAYER CONFIGURATION (The "Musify" Setup)
+  // 1. Configure Buffer to prevent stuttering
   final _player = AudioPlayer(
     audioLoadConfiguration: const AudioLoadConfiguration(
       androidLoadControl: AndroidLoadControl(
@@ -32,9 +32,10 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void _init() async {
-    // 2. CRITICAL FOR ANDROID 14: Set Audio Attributes
+    // 2. CRITICAL ANDROID 14 FIX: Explicitly set attributes
+    // REMOVED 'const' TO FIX BUILD ERROR
     await _player.setAndroidAudioAttributes(
-      const AndroidAudioAttributes(
+      AndroidAudioAttributes(
         contentType: AndroidAudioContentType.music,
         usage: AndroidAudioUsage.media,
       ),
@@ -42,10 +43,10 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void _listenToEvents() {
-    // Broadcast Playback State (Playing/Paused/Buffering)
+    // Broadcast State (Playing/Paused/Buffering)
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
-    // Broadcast Duration (Fixes "0:00" bug)
+    // 3. BROADCAST DURATION (Fixes 0:00 Slider)
     _player.durationStream.listen((duration) {
       if (duration != null) {
         final currentItem = mediaItem.value;
@@ -72,13 +73,12 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> playMediaItem(MediaItem item) async {
     mediaItem.add(item);
     try {
-      // 3. ROBUST LOADING LOGIC
+      // 4. ROBUST HYBRID LOADING
       if (item.id.startsWith('http')) {
-        // Online (YouTube)
         await _player.setUrl(item.id);
       } else {
-        // Local File - Using AudioSource.file is cleaner than Uri.file for just_audio
-        await _player.setAudioSource(AudioSource.file(item.id));
+        // LOCAL FILE FIX: Use AudioSource.uri with file scheme
+        await _player.setAudioSource(AudioSource.uri(Uri.file(item.id)));
       }
       await _player.play();
     } catch (e) {
