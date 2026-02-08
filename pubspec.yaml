@@ -9,41 +9,39 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  
+  # CORE UTILS
   http: ^1.2.0
+  path_provider: ^2.1.2
+  permission_handler: ^11.3.1
+  rxdart: ^0.27.7
 
-  # UI & Icons
+  # UI
   cupertino_icons: ^1.0.8
-  glassmorphism: ^3.0.0
   google_fonts: ^6.2.1
   cached_network_image: ^3.4.1
-
-  # State Management
+  
+  # STATE
   provider: ^6.1.5+1
 
-  # 🎵 AUDIO CORE (Himmy's Fixes)
-  # 1. The Extractor: Turns YouTube IDs into playable links
-  # REMOVE THIS:
-  # youtube_explode_dart: ^3.0.5
+  # 🎵 THE MUSIFY ENGINE (MATCHED)
+  # 1. The Player (Upgraded to Musify's version)
+  just_audio: ^0.10.5
+  
+  # 2. Audio Service (Manual handling, no "background" wrapper)
+  audio_service: ^0.18.18
+  
+  # 3. Audio Session (For focus handling)
+  audio_session: ^0.1.21
 
+  # 4. Local Files
+  on_audio_query: ^2.9.0
+  
+  # 5. YouTube Extractor (Hemant's Fork - Keep this for online later)
   youtube_explode_dart:
     git:
       url: https://github.com/HemantKArya/youtube_explode_dart.git
       ref: master
-  
-  # 2. The Player: Plays the actual audio
-  just_audio: ^0.9.46
-  
-  # 3. Background Play: Notification controls (Play/Pause in lock screen)
-  just_audio_background: ^0.0.1-beta.11
-  
-  # 4. Audio Session: FIXES the "AndroidAudioAttributes" error! 🛠️
-  audio_session: ^0.1.21
-  
-  # 5. Local Files: The version that FIXES the Namespace Error 🛠️
-  on_audio_query: ^2.9.0 
-  
-  # 6. Permissions: Essential for Android 13+ music access
-  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
