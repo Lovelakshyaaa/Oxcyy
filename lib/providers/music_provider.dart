@@ -42,7 +42,7 @@ class MusicProvider with ChangeNotifier {
   bool _isPlaying = false;
   bool _isInitialized = false;
   
-  // Real buffering state
+  // Real buffering state (Controls Spinner)
   bool _isBuffering = false; 
 
   Duration _position = Duration.zero;
@@ -55,10 +55,7 @@ class MusicProvider with ChangeNotifier {
   bool get isMiniPlayerVisible => _isMiniPlayerVisible;
   bool get isPlayerExpanded => _isPlayerExpanded;
   bool get isFetchingLocal => _isFetchingLocal;
-  
-  // FIX: Spinner depends on REAL buffering state
   bool get isLoadingSong => _isBuffering; 
-  
   bool get isPlaying => _isPlaying;
   bool get isInitialized => _isInitialized;
   Duration get position => _position;
@@ -71,19 +68,17 @@ class MusicProvider with ChangeNotifier {
     try {
       _audioHandler = await initAudioService();
       
-      // 1. LISTEN TO STATE (Playing/Buffering)
+      // 1. LISTEN TO STATE
       _audioHandler!.playbackState.listen((state) {
         _isPlaying = state.playing;
         _position = state.position;
-        
-        // This is where the spinner magic happens
+        // Sync Spinner with Real Buffering
         _isBuffering = state.processingState == AudioProcessingState.loading || 
                        state.processingState == AudioProcessingState.buffering;
-        
         notifyListeners();
       });
       
-      // 2. LISTEN TO DURATION (Fixes 0:00 bug)
+      // 2. LISTEN TO DURATION (Fixes 0:00)
       _audioHandler!.mediaItem.listen((item) {
         if (item?.duration != null) {
           _duration = item!.duration!;
@@ -91,7 +86,6 @@ class MusicProvider with ChangeNotifier {
         }
       });
       
-      // 3. LISTEN TO POSITION (Slider movement)
       AudioService.position.listen((pos) {
         _position = pos;
         notifyListeners();
@@ -162,8 +156,7 @@ class MusicProvider with ChangeNotifier {
 
     _isMiniPlayerVisible = true;
     _isPlayerExpanded = true;
-    // We set this true initially, but the stream listener controls it after
-    _isBuffering = true; 
+    _isBuffering = true; // Show spinner immediately
     notifyListeners();
 
     try {
