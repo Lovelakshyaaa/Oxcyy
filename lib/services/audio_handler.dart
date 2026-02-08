@@ -15,18 +15,43 @@ Future<AudioHandler> initAudioService() async {
 }
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
-  final _player = AudioPlayer();
+  // 1. ADVANCED PLAYER CONFIGURATION (The "Musify" Setup)
+  final _player = AudioPlayer(
+    audioLoadConfiguration: const AudioLoadConfiguration(
+      androidLoadControl: AndroidLoadControl(
+        maxBufferDuration: Duration(seconds: 60),
+        bufferForPlaybackDuration: Duration(milliseconds: 500),
+        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
+      ),
+    ),
+  );
 
   MyAudioHandler() {
-    // 1. Broadcast Playback State (Playing/Paused/Buffering)
+    _init();
+    _listenToEvents();
+  }
+
+  void _init() async {
+    // 2. CRITICAL FOR ANDROID 14: Set Audio Attributes
+    await _player.setAndroidAudioAttributes(
+      const AndroidAudioAttributes(
+        contentType: AndroidAudioContentType.music,
+        usage: AndroidAudioUsage.media,
+      ),
+    );
+  }
+
+  void _listenToEvents() {
+    // Broadcast Playback State (Playing/Paused/Buffering)
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
-    // 2. Broadcast Media Item Updates (Duration!)
-    // This fixes the "No Duration" bug
+    // Broadcast Duration (Fixes "0:00" bug)
     _player.durationStream.listen((duration) {
-      if (duration != null && mediaItem.value != null) {
-        final newMediaItem = mediaItem.value!.copyWith(duration: duration);
-        mediaItem.add(newMediaItem);
+      if (duration != null) {
+        final currentItem = mediaItem.value;
+        if (currentItem != null) {
+          mediaItem.add(currentItem.copyWith(duration: duration));
+        }
       }
     });
   }
@@ -47,14 +72,13 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> playMediaItem(MediaItem item) async {
     mediaItem.add(item);
     try {
-      // ⚠️ ROBUST HYBRID LOGIC
+      // 3. ROBUST LOADING LOGIC
       if (item.id.startsWith('http')) {
         // Online (YouTube)
         await _player.setUrl(item.id);
       } else {
-        // Local File - The Fix for "Nothing Plays"
-        // usage of Uri.file ensures correct scheme handling on Android
-        await _player.setAudioSource(AudioSource.uri(Uri.file(item.id)));
+        // Local File - Using AudioSource.file is cleaner than Uri.file for just_audio
+        await _player.setAudioSource(AudioSource.file(item.id));
       }
       await _player.play();
     } catch (e) {
