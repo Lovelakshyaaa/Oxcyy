@@ -36,7 +36,6 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // ARTWORK BUILDER (High Res Fix)
   Widget _buildArtwork(Song song, double size, {bool highRes = false}) {
     if (song.type == 'local' && song.localId != null) {
       return SizedBox(
@@ -45,7 +44,7 @@ class SmartPlayer extends StatelessWidget {
           id: song.localId!,
           type: ArtworkType.AUDIO,
           keepOldArtwork: true,
-          // ⚠️ THE FIX FOR BLURRY ART ⚠️
+          // ⚠️ FIX FOR BLURRY ART
           artworkQuality: FilterQuality.high,
           artworkHeight: highRes ? 1000 : 200,
           artworkWidth: highRes ? 1000 : 200,
@@ -65,7 +64,6 @@ class SmartPlayer extends StatelessWidget {
     }
   }
 
-  // MINI PLAYER
   Widget _buildMiniPlayer(BuildContext context, MusicProvider provider, Song song) {
     return GestureDetector(
       onTap: provider.togglePlayerView, 
@@ -74,10 +72,7 @@ class SmartPlayer extends StatelessWidget {
         color: Colors.transparent,
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: _buildArtwork(song, 45), 
-            ),
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: _buildArtwork(song, 45)),
             SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -91,54 +86,32 @@ class SmartPlayer extends StatelessWidget {
             ),
             provider.isLoadingSong 
               ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : IconButton(
-                  icon: Icon(provider.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white),
-                  onPressed: provider.togglePlayPause,
-                ),
+              : IconButton(icon: Icon(provider.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white), onPressed: provider.togglePlayPause),
           ],
         ),
       ),
     );
   }
 
-  // FULL SCREEN
   Widget _buildFullScreen(BuildContext context, MusicProvider provider, Song song) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Background
           Positioned.fill(child: _buildArtwork(song, double.infinity, highRes: true)),
           Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
           
           SafeArea(
             child: Column(
               children: [
-                Align(
-                  alignment: Alignment.centerLeft, 
-                  child: IconButton(
-                    icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), 
-                    onPressed: provider.collapsePlayer
-                  )
-                ),
+                Align(alignment: Alignment.centerLeft, child: IconButton(icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: provider.collapsePlayer)),
                 Spacer(),
-                
-                // Big Artwork
                 Container(
                   width: 300, height: 300,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20), 
-                    boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))]
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20), 
-                    child: _buildArtwork(song, 300, highRes: true)
-                  ),
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))]),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(20), child: _buildArtwork(song, 300, highRes: true)),
                 ),
-                
                 SizedBox(height: 40),
-                
-                // Glass Panel
                 GlassmorphicContainer(
                   width: MediaQuery.of(context).size.width * 0.9,
                   height: 180,
@@ -153,10 +126,7 @@ class SmartPlayer extends StatelessWidget {
                     children: [
                       Text(song.title, textAlign: TextAlign.center, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                       Text(song.artist, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16)),
-                      
                       SizedBox(height: 10),
-                      
-                      // Slider
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -178,10 +148,7 @@ class SmartPlayer extends StatelessWidget {
                     ],
                   ),
                 ),
-                
                 SizedBox(height: 20),
-                
-                // Controls
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
