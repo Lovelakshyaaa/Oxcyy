@@ -46,7 +46,6 @@ class MusicProvider with ChangeNotifier {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
-  // Getters
   List<Song> get localSongs => _localSongs;
   List<Song> get searchResults => _searchResults;
   Song? get currentSong => (_currentIndex >= 0 && _currentIndex < _queue.length) ? _queue[_currentIndex] : null;
@@ -62,14 +61,11 @@ class MusicProvider with ChangeNotifier {
   Stream<PlaybackState>? get playbackState => _audioHandler?.playbackState;
 
   Future<void> init() async {
-    // Don't return if already initialized, we might need to re-hook listeners
+    if (_isInitialized) return;
     try {
-      if (_audioHandler == null) {
-        _audioHandler = await initAudioService();
-      }
+      _audioHandler = await initAudioService();
       
-      // Re-hook listeners safely
-      _audioHandler?.playbackState.listen((state) {
+      _audioHandler!.playbackState.listen((state) {
         _isPlaying = state.playing;
         _position = state.position;
         _isBuffering = state.processingState == AudioProcessingState.loading || 
@@ -77,7 +73,7 @@ class MusicProvider with ChangeNotifier {
         notifyListeners();
       });
       
-      _audioHandler?.mediaItem.listen((item) {
+      _audioHandler!.mediaItem.listen((item) {
         if (item?.duration != null) {
           _duration = item!.duration!;
           notifyListeners();
@@ -91,10 +87,7 @@ class MusicProvider with ChangeNotifier {
 
       _isInitialized = true;
       notifyListeners();
-      
-      if (_localSongs.isEmpty) {
-        await fetchLocalSongs(); 
-      }
+      await fetchLocalSongs(); 
     } catch (e) {
       print("Init Error: $e");
     }
@@ -133,31 +126,19 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     try {
       var results = await _yt.search.getVideos(query);
-      _searchResults = results.map((video) {
-        // ⚠️ SEARCH ART FIX: Fallback if highRes is empty
-        String art = video.thumbnails.highResUrl;
-        if (art.isEmpty) art = video.thumbnails.mediumResUrl;
-        if (art.isEmpty) art = video.thumbnails.lowResUrl;
-
-        return Song(
-          id: video.id.value,
-          title: video.title,
-          artist: video.author,
-          thumbUrl: art,
-          type: 'video',
-        );
-      }).toList();
+      _searchResults = results.map((video) => Song(
+        id: video.id.value,
+        title: video.title,
+        artist: video.author,
+        thumbUrl: video.thumbnails.highResUrl,
+        type: 'video',
+      )).toList();
       notifyListeners();
     } catch (e) { print("Search Error: $e"); }
   }
 
   Future<void> play(Song song) async {
-    // 1. ⚠️ SHOW UI IMMEDIATELY (Fixes "No Pop-up")
-    _isMiniPlayerVisible = true;
-    _isPlayerExpanded = true;
-    _isBuffering = true;
-    
-    // Set current song & queue immediately so UI has data
+    // 1. FORCE UI UP NOW
     if (song.type == 'local') {
       _queue = _localSongs;
     } else {
@@ -165,20 +146,15 @@ class MusicProvider with ChangeNotifier {
     }
     _currentIndex = _queue.indexOf(song);
     if (_currentIndex == -1) _currentIndex = 0;
-    
-    notifyListeners(); // RENDER UI NOW
 
-    // 2. LAZY INIT: If handler died, revive it
-    if (_audioHandler == null) {
-      print("Handler was dead. Reviving...");
-      await init();
-      if (_audioHandler == null) {
-        // If still dead, stop buffering state
-        _isBuffering = false;
-        notifyListeners();
-        return; 
-      }
-    }
+    _isMiniPlayerVisible = true;
+    _isPlayerExpanded = true;
+    _isBuffering = true;
+    notifyListeners();
+
+    // 2. Init if needed
+    if (_audioHandler == null) await init();
+    if (_audioHandler == null) return;
 
     try {
       String playUrl = "";
@@ -195,7 +171,7 @@ class MusicProvider with ChangeNotifier {
         album: song.type == 'local' ? "Local Music" : "YouTube",
         title: song.title,
         artist: song.artist,
-        artUri: song.type == 'video' ? Uri.tryParse(song.thumbUrl) : null,
+        artUri: song.type == 'video' ? Uri.parse(song.thumbUrl) : null,
         extras: {'localId': song.localId},
       );
 
