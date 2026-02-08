@@ -2,8 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:on_audio_query/on_audio_query.dart'; // REQUIRED for Local Art
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:glassmorphism/glassmorphism.dart'; // For the requested UI
 import 'package:oxcy/providers/music_provider.dart';
 
 class SmartPlayer extends StatelessWidget {
@@ -36,9 +37,9 @@ class SmartPlayer extends StatelessWidget {
   }
 
   // -----------------------------------------------------------
-  // HELPER: ARTWORK BUILDER (Smart Switcher)
+  // HELPER: ARTWORK BUILDER (High Res Fix)
   // -----------------------------------------------------------
-  Widget _buildArtwork(Song song, double size) {
+  Widget _buildArtwork(Song song, double size, {bool highRes = false}) {
     if (song.type == 'local' && song.localId != null) {
       return SizedBox(
         width: size, height: size,
@@ -46,7 +47,14 @@ class SmartPlayer extends StatelessWidget {
           id: song.localId!,
           type: ArtworkType.AUDIO,
           keepOldArtwork: true,
-          nullArtworkWidget: Container(color: Colors.grey[900], child: Icon(Icons.music_note, color: Colors.white)),
+          // FIX: Request High Quality & Large Size
+          artworkQuality: highRes ? FilterQuality.high : FilterQuality.low,
+          artworkHeight: highRes ? 1000 : 200,
+          artworkWidth: highRes ? 1000 : 200,
+          nullArtworkWidget: Container(
+            color: Colors.grey[900], 
+            child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5)
+          ),
         ),
       );
     } else {
@@ -65,12 +73,12 @@ class SmartPlayer extends StatelessWidget {
       onTap: provider.togglePlayerView, 
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16),
-        color: Colors.transparent,
+        color: Colors.transparent, // Let background show
         child: Row(
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: _buildArtwork(song, 45), // Uses Smart Switcher
+              child: _buildArtwork(song, 45), 
             ),
             SizedBox(width: 12),
             Expanded(
@@ -95,56 +103,105 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // FULL SCREEN
+  // FULL SCREEN (With Glassmorphism)
   Widget _buildFullScreen(BuildContext context, MusicProvider provider, Song song) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // Blurry Background
-          Positioned.fill(child: _buildArtwork(song, double.infinity)),
-          Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30), child: Container(color: Colors.black.withOpacity(0.7)))),
+          // 1. Blurry Background Image
+          Positioned.fill(child: _buildArtwork(song, double.infinity, highRes: true)),
+          Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
           
           SafeArea(
             child: Column(
               children: [
-                Align(alignment: Alignment.centerLeft, child: IconButton(icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: provider.collapsePlayer)),
+                Align(
+                  alignment: Alignment.centerLeft, 
+                  child: IconButton(
+                    icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), 
+                    onPressed: provider.collapsePlayer
+                  )
+                ),
                 Spacer(),
                 
-                // Big Artwork
+                // 2. Big Artwork (Crystal Clear)
                 Container(
                   width: 300, height: 300,
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 20)]),
-                  child: ClipRRect(borderRadius: BorderRadius.circular(20), child: _buildArtwork(song, 300)),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20), 
+                    boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))]
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20), 
+                    child: _buildArtwork(song, 300, highRes: true) // HIGH RES FLAG ON
+                  ),
                 ),
                 
-                SizedBox(height: 30),
-                Text(song.title, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                Text(song.artist, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 18)),
+                SizedBox(height: 40),
                 
-                SizedBox(height: 30),
-                
-                // Slider
-                Slider(
-                  value: provider.position.inSeconds.toDouble().clamp(0, provider.duration.inSeconds.toDouble()),
-                  max: provider.duration.inSeconds.toDouble() > 0 ? provider.duration.inSeconds.toDouble() : 1, 
-                  activeColor: Colors.purpleAccent,
-                  onChanged: (val) => provider.seek(Duration(seconds: val.toInt())),
+                // 3. Glass Control Panel
+                GlassmorphicContainer(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  height: 180,
+                  borderRadius: 20,
+                  blur: 15,
+                  alignment: Alignment.center,
+                  border: 1,
+                  linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
+                  borderGradient: LinearGradient(colors: [Colors.white.withOpacity(0.2), Colors.white.withOpacity(0.1)]),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(song.title, textAlign: TextAlign.center, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                      Text(song.artist, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16)),
+                      
+                      SizedBox(height: 10),
+                      
+                      // Slider & Duration
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            Text(_formatDuration(provider.position), style: TextStyle(color: Colors.white54, fontSize: 12)),
+                            Expanded(
+                              child: Slider(
+                                value: provider.position.inSeconds.toDouble().clamp(0, provider.duration.inSeconds.toDouble()),
+                                max: provider.duration.inSeconds.toDouble() > 0 ? provider.duration.inSeconds.toDouble() : 1, 
+                                activeColor: Colors.purpleAccent,
+                                inactiveColor: Colors.white10,
+                                onChanged: (val) => provider.seek(Duration(seconds: val.toInt())),
+                              ),
+                            ),
+                            Text(_formatDuration(provider.duration), style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 
+                SizedBox(height: 20),
+                
+                // 4. Controls
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IconButton(icon: Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: provider.previous),
+                    IconButton(icon: Icon(Icons.skip_previous_rounded, color: Colors.white, size: 45), onPressed: provider.previous),
                     SizedBox(width: 20),
                     Container(
-                      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                      child: provider.isLoadingSong 
-                        ? Padding(padding: EdgeInsets.all(15), child: CircularProgressIndicator(color: Colors.black))
-                        : IconButton(iconSize: 50, icon: Icon(provider.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.black), onPressed: provider.togglePlayPause),
+                      decoration: BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.purple.withOpacity(0.4), blurRadius: 15)]),
+                      padding: EdgeInsets.all(5),
+                      child: IconButton(
+                        iconSize: 50, 
+                        icon: provider.isLoadingSong 
+                          ? SizedBox(width: 30, height: 30, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                          : Icon(provider.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white),
+                        onPressed: provider.togglePlayPause
+                      ),
                     ),
                     SizedBox(width: 20),
-                    IconButton(icon: Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: provider.next),
+                    IconButton(icon: Icon(Icons.skip_next_rounded, color: Colors.white, size: 45), onPressed: provider.next),
                   ],
                 ),
                 Spacer(),
@@ -154,5 +211,11 @@ class SmartPlayer extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDuration(Duration d) {
+    final min = d.inMinutes;
+    final sec = d.inSeconds % 60;
+    return '${min}:${sec.toString().padLeft(2, '0')}';
   }
 }
