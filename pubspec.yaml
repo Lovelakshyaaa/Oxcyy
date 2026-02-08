@@ -28,7 +28,7 @@ dependencies:
   youtube_explode_dart:
     git:
       url: https://github.com/HemantKArya/youtube_explode_dart.git
-      ref: main
+      ref: master
   
   # 2. The Player: Plays the actual audio
   just_audio: ^0.9.46
