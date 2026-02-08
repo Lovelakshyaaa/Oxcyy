@@ -17,11 +17,8 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   final _player = AudioPlayer();
 
   MyAudioHandler() {
-    // Broadcast playback state changes
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
   }
-
-  // --- CONTROLS ---
 
   @override
   Future<void> play() => _player.play();
@@ -35,36 +32,33 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() => _player.stop();
 
-  // --- PLAYBACK LOGIC ---
-
   Future<void> playMediaItem(MediaItem item) async {
-    // Notify system about the new song
     mediaItem.add(item);
-    
-    // Play the file
     try {
-      // FIX: Use file path directly (Musify style)
-      await _player.setFilePath(item.id);
+      // ⚠️ HYBRID LOGIC: Check if it's a URL or a File
+      if (item.id.startsWith('http')) {
+        // It's YouTube/Stream
+        await _player.setUrl(item.id); 
+      } else {
+        // It's Local
+        await _player.setFilePath(item.id);
+      }
       await _player.play();
     } catch (e) {
       print("Handler Error: $e");
     }
   }
 
-  // --- STATE MAPPING ---
-
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [
-        MediaControl.rewind,
+        MediaControl.skipToPrevious,
         if (_player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.stop,
-        MediaControl.fastForward,
+        MediaControl.skipToNext,
       ],
       systemActions: const {
         MediaAction.seek,
-        MediaAction.seekForward,
-        MediaAction.seekBackward,
       },
       androidCompactActionIndices: const [0, 1, 3],
       processingState: const {
