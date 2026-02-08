@@ -41,14 +41,11 @@ class MusicProvider with ChangeNotifier {
   bool _isPlayerExpanded = false;
   bool _isPlaying = false;
   bool _isInitialized = false;
-  
-  // Real buffering state (Controls Spinner)
   bool _isBuffering = false; 
 
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
-  // Getters
   List<Song> get localSongs => _localSongs;
   List<Song> get searchResults => _searchResults;
   Song? get currentSong => (_currentIndex >= 0 && _currentIndex < _queue.length) ? _queue[_currentIndex] : null;
@@ -68,11 +65,10 @@ class MusicProvider with ChangeNotifier {
     try {
       _audioHandler = await initAudioService();
       
-      // 1. LISTEN TO STATE
+      // 1. LISTEN TO STATE (Buffering Logic)
       _audioHandler!.playbackState.listen((state) {
         _isPlaying = state.playing;
         _position = state.position;
-        // Sync Spinner with Real Buffering
         _isBuffering = state.processingState == AudioProcessingState.loading || 
                        state.processingState == AudioProcessingState.buffering;
         notifyListeners();
@@ -156,7 +152,7 @@ class MusicProvider with ChangeNotifier {
 
     _isMiniPlayerVisible = true;
     _isPlayerExpanded = true;
-    _isBuffering = true; // Show spinner immediately
+    _isBuffering = true;
     notifyListeners();
 
     try {
