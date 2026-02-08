@@ -37,14 +37,14 @@ class MusicProvider with ChangeNotifier {
   int _currentIndex = -1;
 
   bool _isFetchingLocal = false;
-  bool _isLoadingSong = false;
   bool _isMiniPlayerVisible = false;
   bool _isPlayerExpanded = false;
   bool _isPlaying = false;
   bool _isInitialized = false;
+  bool _isBuffering = false; // Real loading state
+
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
-  String? _errorMessage;
 
   // Getters
   List<Song> get localSongs => _localSongs;
@@ -53,24 +53,40 @@ class MusicProvider with ChangeNotifier {
   bool get isMiniPlayerVisible => _isMiniPlayerVisible;
   bool get isPlayerExpanded => _isPlayerExpanded;
   bool get isFetchingLocal => _isFetchingLocal;
-  bool get isLoadingSong => _isLoadingSong;
+  
+  // FIX: Spinner depends on REAL buffering state
+  bool get isLoadingSong => _isBuffering; 
+  
   bool get isPlaying => _isPlaying;
   bool get isInitialized => _isInitialized;
   Duration get position => _position;
   Duration get duration => _duration;
-  String? get errorMessage => _errorMessage;
   
   Stream<PlaybackState>? get playbackState => _audioHandler?.playbackState;
 
   Future<void> init() async {
-    if (_isInitialized && _audioHandler != null) return;
+    if (_isInitialized) return;
     try {
       _audioHandler = await initAudioService();
       
+      // LISTEN TO PLAYBACK STATE (Buffering, Playing, etc)
       _audioHandler!.playbackState.listen((state) {
         _isPlaying = state.playing;
         _position = state.position;
+        
+        // Check if we are loading/buffering
+        _isBuffering = state.processingState == AudioProcessingState.loading || 
+                       state.processingState == AudioProcessingState.buffering;
+        
         notifyListeners();
+      });
+      
+      // LISTEN TO MEDIA ITEM (Duration updates)
+      _audioHandler!.mediaItem.listen((item) {
+        if (item != null) {
+          _duration = item.duration ?? Duration.zero;
+          notifyListeners();
+        }
       });
       
       AudioService.position.listen((pos) {
@@ -82,7 +98,7 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
       await fetchLocalSongs(); 
     } catch (e) {
-      print("CRITICAL INIT ERROR: $e");
+      print("Init Error: $e");
     }
   }
 
@@ -90,12 +106,7 @@ class MusicProvider with ChangeNotifier {
     _isFetchingLocal = true;
     notifyListeners();
     try {
-      Map<Permission, PermissionStatus> statuses = await [
-        Permission.audio,
-        Permission.storage,
-      ].request();
-
-      if (statuses[Permission.audio]!.isGranted || statuses[Permission.storage]!.isGranted) {
+      if (await Permission.audio.request().isGranted || await Permission.storage.request().isGranted) {
         final OnAudioQuery audioQuery = OnAudioQuery();
         List<SongModel> songs = await audioQuery.querySongs(
           sortType: SongSortType.DATE_ADDED,
@@ -136,13 +147,8 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> play(Song song) async {
-    // 1. FORCE UI VISIBLE IMMEDIATELY (The Fix)
-    _isMiniPlayerVisible = true;
-    _isPlayerExpanded = true;
-    _isLoadingSong = true;
-    _errorMessage = null;
-    
-    // Update Queue Logic
+    if (_audioHandler == null) return;
+
     if (song.type == 'local') {
       _queue = _localSongs;
     } else {
@@ -150,20 +156,10 @@ class MusicProvider with ChangeNotifier {
     }
     _currentIndex = _queue.indexOf(song);
     if (_currentIndex == -1) _currentIndex = 0;
-    
-    notifyListeners(); // Render UI now
 
-    // 2. CHECK & REVIVE HANDLER
-    if (_audioHandler == null) {
-      print("Handler dead. Attempting revival...");
-      await init();
-      if (_audioHandler == null) {
-        _errorMessage = "Restart App";
-        _isLoadingSong = false;
-        notifyListeners();
-        return;
-      }
-    }
+    _isMiniPlayerVisible = true;
+    _isPlayerExpanded = true;
+    notifyListeners();
 
     try {
       String playUrl = "";
@@ -185,14 +181,10 @@ class MusicProvider with ChangeNotifier {
       );
 
       await (_audioHandler as MyAudioHandler).playMediaItem(mediaItem);
-      _isLoadingSong = false;
-      notifyListeners();
+      // Removed manual isLoading = false, handled by stream listener now
 
     } catch (e) {
       print("Play Error: $e");
-      _errorMessage = "Playback Failed";
-      _isLoadingSong = false;
-      notifyListeners();
     }
   }
 
@@ -200,13 +192,14 @@ class MusicProvider with ChangeNotifier {
     try {
       var manifest = await _yt.videos.streamsClient.getManifest(id);
       return manifest.audioOnly.withHighestBitrate().url.toString();
-    } catch (e) { print("Lib failed"); }
-    try {
-      var res = await http.get(Uri.parse('https://yt.lemnoslife.com/videos?part=streaming&id=$id'));
-      var data = jsonDecode(res.body);
-      return data['items'][0]['streamingData']['adaptiveFormats']
-          .firstWhere((f) => f['mimeType'].contains('audio/mp4'))['url'];
-    } catch (e) { print("Proxy failed"); }
+    } catch (e) { 
+      try {
+        var res = await http.get(Uri.parse('https://yt.lemnoslife.com/videos?part=streaming&id=$id'));
+        var data = jsonDecode(res.body);
+        return data['items'][0]['streamingData']['adaptiveFormats']
+            .firstWhere((f) => f['mimeType'].contains('audio/mp4'))['url'];
+      } catch (e) { return ""; }
+    }
     return "";
   }
 
