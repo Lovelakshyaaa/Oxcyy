@@ -9,7 +9,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import '../services/audio_handler.dart';
 
-// DATA MODEL
 class Song {
   final String id;
   final String title;
@@ -45,6 +44,7 @@ class MusicProvider with ChangeNotifier {
   bool _isInitialized = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  String? _errorMessage;
 
   // Getters
   List<Song> get localSongs => _localSongs;
@@ -58,12 +58,12 @@ class MusicProvider with ChangeNotifier {
   bool get isInitialized => _isInitialized;
   Duration get position => _position;
   Duration get duration => _duration;
+  String? get errorMessage => _errorMessage;
   
   Stream<PlaybackState>? get playbackState => _audioHandler?.playbackState;
 
-  // INIT
   Future<void> init() async {
-    if (_isInitialized) return;
+    if (_isInitialized && _audioHandler != null) return;
     try {
       _audioHandler = await initAudioService();
       
@@ -82,7 +82,7 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
       await fetchLocalSongs(); 
     } catch (e) {
-      print("Init Error: $e");
+      print("CRITICAL INIT ERROR: $e");
     }
   }
 
@@ -119,7 +119,6 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // SEARCH
   Future<void> search(String query) async {
     _searchResults = [];
     notifyListeners();
@@ -136,11 +135,14 @@ class MusicProvider with ChangeNotifier {
     } catch (e) { print("Search Error: $e"); }
   }
 
-  // PLAY (FORCE UI UPDATE)
   Future<void> play(Song song) async {
-    if (_audioHandler == null) return;
-
-    // 1. Setup Queue
+    // 1. FORCE UI VISIBLE IMMEDIATELY (The Fix)
+    _isMiniPlayerVisible = true;
+    _isPlayerExpanded = true;
+    _isLoadingSong = true;
+    _errorMessage = null;
+    
+    // Update Queue Logic
     if (song.type == 'local') {
       _queue = _localSongs;
     } else {
@@ -148,12 +150,20 @@ class MusicProvider with ChangeNotifier {
     }
     _currentIndex = _queue.indexOf(song);
     if (_currentIndex == -1) _currentIndex = 0;
+    
+    notifyListeners(); // Render UI now
 
-    // 2. FORCE UI TO SHOW IMMEDIATELY
-    _isMiniPlayerVisible = true;
-    _isPlayerExpanded = true;
-    _isLoadingSong = true;
-    notifyListeners(); // <--- Update UI NOW
+    // 2. CHECK & REVIVE HANDLER
+    if (_audioHandler == null) {
+      print("Handler dead. Attempting revival...");
+      await init();
+      if (_audioHandler == null) {
+        _errorMessage = "Restart App";
+        _isLoadingSong = false;
+        notifyListeners();
+        return;
+      }
+    }
 
     try {
       String playUrl = "";
@@ -180,6 +190,7 @@ class MusicProvider with ChangeNotifier {
 
     } catch (e) {
       print("Play Error: $e");
+      _errorMessage = "Playback Failed";
       _isLoadingSong = false;
       notifyListeners();
     }
@@ -189,7 +200,7 @@ class MusicProvider with ChangeNotifier {
     try {
       var manifest = await _yt.videos.streamsClient.getManifest(id);
       return manifest.audioOnly.withHighestBitrate().url.toString();
-    } catch (e) { print("Lib failed, trying proxy..."); }
+    } catch (e) { print("Lib failed"); }
     try {
       var res = await http.get(Uri.parse('https://yt.lemnoslife.com/videos?part=streaming&id=$id'));
       var data = jsonDecode(res.body);
