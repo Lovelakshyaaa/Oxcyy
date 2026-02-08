@@ -2,8 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:on_audio_query/on_audio_query.dart'; // REQUIRED for Local Art
 import 'package:google_fonts/google_fonts.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:oxcy/providers/music_provider.dart';
 
 class SmartPlayer extends StatelessWidget {
@@ -11,16 +11,6 @@ class SmartPlayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = Provider.of<MusicProvider>(context);
     final song = provider.currentSong;
-
-    // ERROR LISTENER
-    if (provider.errorMessage != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(provider.errorMessage!), backgroundColor: Colors.red),
-        );
-        provider.clearError();
-      });
-    }
 
     if (song == null || !provider.isMiniPlayerVisible) return SizedBox.shrink();
 
@@ -33,9 +23,7 @@ class SmartPlayer extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: Color(0xFF1A1A2E), 
-        borderRadius: provider.isPlayerExpanded 
-            ? BorderRadius.zero 
-            : BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+        borderRadius: provider.isPlayerExpanded ? BorderRadius.zero : BorderRadius.vertical(top: Radius.circular(16)),
         boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 10)],
       ),
       child: Stack(
@@ -47,20 +35,42 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
+  // -----------------------------------------------------------
+  // HELPER: ARTWORK BUILDER (Smart Switcher)
+  // -----------------------------------------------------------
+  Widget _buildArtwork(Song song, double size) {
+    if (song.type == 'local' && song.localId != null) {
+      return SizedBox(
+        width: size, height: size,
+        child: QueryArtworkWidget(
+          id: song.localId!,
+          type: ArtworkType.AUDIO,
+          keepOldArtwork: true,
+          nullArtworkWidget: Container(color: Colors.grey[900], child: Icon(Icons.music_note, color: Colors.white)),
+        ),
+      );
+    } else {
+      return CachedNetworkImage(
+        imageUrl: song.thumbUrl,
+        width: size, height: size,
+        fit: BoxFit.cover,
+        errorWidget: (_,__,___) => Container(color: Colors.grey[900], child: Icon(Icons.music_note)),
+      );
+    }
+  }
+
+  // MINI PLAYER
   Widget _buildMiniPlayer(BuildContext context, MusicProvider provider, Song song) {
     return GestureDetector(
       onTap: provider.togglePlayerView, 
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-           color: Color(0xFF2E2E4D),
-           borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
-        ),
+        color: Colors.transparent,
         child: Row(
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(imageUrl: song.thumbUrl, width: 45, height: 45, fit: BoxFit.cover),
+              child: _buildArtwork(song, 45), // Uses Smart Switcher
             ),
             SizedBox(width: 12),
             Expanded(
@@ -73,11 +83,10 @@ class SmartPlayer extends StatelessWidget {
                 ],
               ),
             ),
-            // Loading Spinner or Play Button
             provider.isLoadingSong 
               ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : IconButton(
-                  icon: Icon(provider.player.playing ? Icons.pause : Icons.play_arrow, color: Colors.white),
+                  icon: Icon(provider.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white),
                   onPressed: provider.togglePlayPause,
                 ),
           ],
@@ -86,119 +95,56 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
+  // FULL SCREEN
   Widget _buildFullScreen(BuildContext context, MusicProvider provider, Song song) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          Positioned.fill(child: CachedNetworkImage(imageUrl: song.thumbUrl, fit: BoxFit.cover)),
-          Positioned.fill(
-             child: BackdropFilter(
-               filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-               child: Container(color: Colors.black.withOpacity(0.7)),
-             ),
-          ),
+          // Blurry Background
+          Positioned.fill(child: _buildArtwork(song, double.infinity)),
+          Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30), child: Container(color: Colors.black.withOpacity(0.7)))),
           
           SafeArea(
             child: Column(
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30),
-                    onPressed: provider.collapsePlayer, 
-                  ),
-                ),
+                Align(alignment: Alignment.centerLeft, child: IconButton(icon: Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: provider.collapsePlayer)),
                 Spacer(),
                 
+                // Big Artwork
                 Container(
                   width: 300, height: 300,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 20, offset: Offset(0, 10))],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: CachedNetworkImage(imageUrl: song.thumbUrl, fit: BoxFit.cover),
-                  ),
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 20)]),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(20), child: _buildArtwork(song, 300)),
                 ),
                 
                 SizedBox(height: 30),
-                
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    children: [
-                      Text(song.title, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                      Text(song.artist, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 18)),
-                    ],
-                  ),
-                ),
+                Text(song.title, textAlign: TextAlign.center, style: GoogleFonts.poppins(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                Text(song.artist, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 18)),
                 
                 SizedBox(height: 30),
                 
-                StreamBuilder<Duration>(
-                  stream: provider.player.positionStream,
-                  builder: (context, snapshot) {
-                    final position = snapshot.data ?? Duration.zero;
-                    final total = provider.player.duration ?? Duration.zero;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        children: [
-                          Slider(
-                            value: position.inSeconds.toDouble().clamp(0, total.inSeconds.toDouble()),
-                            max: total.inSeconds.toDouble() > 0 ? total.inSeconds.toDouble() : 1, 
-                            activeColor: Colors.purpleAccent,
-                            onChanged: (val) => provider.player.seek(Duration(seconds: val.toInt())),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(_formatDuration(position), style: TextStyle(color: Colors.white54)),
-                                total.inSeconds == 0 
-                                  ? SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1, color: Colors.white)) 
-                                  : Text(_formatDuration(total), style: TextStyle(color: Colors.white54)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+                // Slider
+                Slider(
+                  value: provider.position.inSeconds.toDouble().clamp(0, provider.duration.inSeconds.toDouble()),
+                  max: provider.duration.inSeconds.toDouble() > 0 ? provider.duration.inSeconds.toDouble() : 1, 
+                  activeColor: Colors.purpleAccent,
+                  onChanged: (val) => provider.seek(Duration(seconds: val.toInt())),
                 ),
                 
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IconButton(
-                       icon: Icon(Icons.shuffle, color: provider.isShuffling ? Colors.purpleAccent : Colors.white54),
-                       onPressed: provider.toggleShuffle,
-                    ),
                     IconButton(icon: Icon(Icons.skip_previous, color: Colors.white, size: 40), onPressed: provider.previous),
-                    
-                    // PLAY BUTTON WITH LOADER
+                    SizedBox(width: 20),
                     Container(
                       decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                       child: provider.isLoadingSong 
                         ? Padding(padding: EdgeInsets.all(15), child: CircularProgressIndicator(color: Colors.black))
-                        : IconButton(
-                            iconSize: 50,
-                            icon: Icon(provider.player.playing ? Icons.pause : Icons.play_arrow, color: Colors.black),
-                            onPressed: provider.togglePlayPause,
-                          ),
+                        : IconButton(iconSize: 50, icon: Icon(provider.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.black), onPressed: provider.togglePlayPause),
                     ),
-                    
+                    SizedBox(width: 20),
                     IconButton(icon: Icon(Icons.skip_next, color: Colors.white, size: 40), onPressed: provider.next),
-                    IconButton(
-                       icon: Icon(
-                         provider.loopMode == LoopMode.one ? Icons.repeat_one : Icons.repeat, 
-                         color: provider.loopMode != LoopMode.off ? Colors.purpleAccent : Colors.white54
-                       ),
-                       onPressed: provider.toggleLoop,
-                    ),
                   ],
                 ),
                 Spacer(),
@@ -208,11 +154,5 @@ class SmartPlayer extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatDuration(Duration d) {
-    final min = d.inMinutes;
-    final sec = d.inSeconds % 60;
-    return '${min}:${sec.toString().padLeft(2, '0')}';
   }
 }
