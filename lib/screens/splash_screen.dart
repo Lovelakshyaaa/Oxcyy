@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/main.dart'; // To access MainScaffold
+import 'package:oxcy/main.dart'; 
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -12,7 +12,6 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Start initialization after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initApp();
     });
@@ -20,12 +19,19 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _initApp() async {
     final provider = Provider.of<MusicProvider>(context, listen: false);
+    
+    // 1. Initialize Engine
     await provider.init();
     
-    // Navigate to Main App
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => MainScaffold()),
-    );
+    // 2. Force a delay so the splash looks nice (Fixes "Half Second" glitch)
+    await Future.delayed(Duration(seconds: 2));
+    
+    // 3. Navigate
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => MainScaffold()),
+      );
+    }
   }
 
   @override
@@ -36,7 +42,6 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Your App Logo or Icon
             Icon(Icons.music_note_rounded, size: 100, color: Colors.purpleAccent),
             SizedBox(height: 20),
             Text(
@@ -51,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen> {
             SizedBox(height: 40),
             CircularProgressIndicator(color: Colors.purpleAccent),
             SizedBox(height: 20),
-            Text("Initializing Engine...", style: TextStyle(color: Colors.white54)),
+            Text("Starting Engine...", style: TextStyle(color: Colors.white54)),
           ],
         ),
       ),
