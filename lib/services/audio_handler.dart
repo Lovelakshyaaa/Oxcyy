@@ -1,7 +1,8 @@
 import 'dart:io';
+import 'package:flutter/services.dart'; // <--- NEW IMPORT FOR CLIPBOARD
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:audio_session/audio_session.dart'; // <--- MANDATORY IMPORT 
+import 'package:audio_session/audio_session.dart'; 
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -11,7 +12,7 @@ Future<AudioHandler> initAudioService() async {
       androidNotificationChannelName: 'Music Playback',
       androidNotificationIcon: 'mipmap/ic_launcher',
       androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true, // 
+      androidStopForegroundOnPause: true, 
       // ⚠️ REQUIRED FOR ANDROID 13+ CONTROLS
       androidShowNotificationBadge: true,
     ),
@@ -24,7 +25,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   MyAudioHandler() {
     _init();
     
-    // Broadcast playback events to UI [cite: 618]
+    // Broadcast playback events to UI
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
     
     // Sync duration
@@ -41,7 +42,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
     
-    // Handle unplugging headphones / call interruptions [cite: 627, 628]
+    // Handle unplugging headphones / call interruptions
     session.interruptionEventStream.listen((event) {
       if (event.begin) {
         switch (event.type) {
@@ -103,6 +104,11 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     } catch (e) {
       print("Handler Error: $e");
 
+      // ⚠️ THE CLIPBOARD TRAP ⚠️
+      // This forces the error into your copy-paste buffer
+      String errorMsg = "DEBUG_ERR: $e";
+      await Clipboard.setData(ClipboardData(text: errorMsg));
+
       // ⚠️ THE LOCK SCREEN REPORTER ⚠️
       // This changes the song title in the notification to the EXACT error.
       mediaItem.add(item.copyWith(
@@ -113,6 +119,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
       // Reset state to ready (but not playing) so the error notification stays visible
       playbackState.add(playbackState.value.copyWith(
         processingState: AudioProcessingState.idle,
+        errorMessage: errorMsg,
         playing: false,
       ));
     }
