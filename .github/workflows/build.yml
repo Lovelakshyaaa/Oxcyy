@@ -18,7 +18,7 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # 🛡️ THE BULLETPROOF GENERATION
+      # 🛡️ THE MONOLITH GENERATION (Namespace + JVM Fix)
       # ---------------------------------------------------
       - name: 🏗️ Reconstructing Android Project
         run: |
@@ -29,7 +29,7 @@ jobs:
           rm -f android/settings.gradle android/build.gradle android/app/build.gradle
           rm -f android/gradle/wrapper/gradle-wrapper.properties
 
-          # 2. SETTINGS.GRADLE (The Root Map)
+          # 2. SETTINGS.GRADLE
           echo 'pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
@@ -46,20 +46,36 @@ jobs:
           }
           include ":app"' > android/settings.gradle
 
-          # 3. ROOT BUILD.GRADLE (The Global Repo Fix)
+          # 3. ROOT BUILD.GRADLE (The Namespace & JVM Injector 👮)
           echo 'allprojects {
               repositories { google(); mavenCentral() }
           }
           rootProject.buildDir = "../build"
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(":app")
+              
+              // ⚠️ THE ON_AUDIO_QUERY FIX: Inject Namespace if missing
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      project.android {
+                          if (namespace == null) {
+                              namespace = project.group.toString()
+                          }
+                          compileOptions {
+                              sourceCompatibility = JavaVersion.VERSION_17
+                              targetCompatibility = JavaVersion.VERSION_17
+                          }
+                      }
+                      // Force Kotlin to 17 for the library
+                      tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                          kotlinOptions { jvmTarget = "17" }
+                      }
+                  }
+              }
           }
           tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
 
-          # 4. APP/BUILD.GRADLE (The Android 15 Core)
+          # 4. APP/BUILD.GRADLE
           echo 'plugins {
               id "com.android.application"
               id "org.jetbrains.kotlin.android"
@@ -78,8 +94,6 @@ jobs:
                   applicationId "com.example.oxcy"
                   minSdkVersion 24
                   targetSdkVersion 35
-                  versionCode 1
-                  versionName "1.0"
               }
               buildTypes {
                   release {
@@ -93,24 +107,15 @@ jobs:
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.23"
           }' > android/app/build.gradle
 
-          # 5. GRADLE WRAPPER (Fixes :gradle:compileKotlin)
+          # 5. GRADLE WRAPPER & PROPERTIES
           mkdir -p android/gradle/wrapper
-          echo 'distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-all.zip' > android/gradle/wrapper/gradle-wrapper.properties
-          
-          # 6. GRADLE PROPERTIES (Silence the Mismatch)
+          echo 'distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-all.zip' > android/gradle/wrapper/gradle-wrapper.properties
           echo 'org.gradle.jvmargs=-Xmx4G
           android.useAndroidX=true
           android.enableJetifier=true
           kotlin.jvm.target.validation.mode=ignore' > android/gradle.properties
 
-      # ---------------------------------------------------
-      # ☢️ THE NUCLEAR RESET
-      # ---------------------------------------------------
-      - name: 🧹 Purging Cache and Building
+      - name: ☢️ FINAL CLEAN & BUILD
         run: |
           rm -f pubspec.lock
           flutter clean
