@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.myapp"
+    namespace = "com.example.oxcy"
     // FIX 1: Force SDK 34 so permissions work
     compileSdk = 34
     ndkVersion = flutter.ndkVersion
