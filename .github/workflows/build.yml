@@ -159,14 +159,20 @@ jobs:
           
           chmod +x android/gradlew
 
-      - run: flutter pub get
+      # ---------------------------------------------------
+      # 🧹 STEP: NUCLEAR CLEAN (The "Refresh" Button)
+      # ---------------------------------------------------
+      - name: ☢️ FLUSHING CACHES & DEPENDENCIES
+        run: |
+          rm -f pubspec.lock
+          flutter clean
+          flutter pub get
       
-      # --- THE CRITICAL FIX: FLUSH OLD DEPENDENCIES ---
-      - run: rm -f pubspec.lock
-      - run: flutter pub get
-      # ------------------------------------------------
-
-      - run: flutter build apk --release --no-tree-shake-icons
+      # ---------------------------------------------------
+      # STEP: BUILD
+      # ---------------------------------------------------
+      - name: 🏗️ Building APK
+        run: flutter build apk --release --no-tree-shake-icons
 
       - uses: actions/upload-artifact@v4
         with:
