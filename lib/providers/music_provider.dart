@@ -106,8 +106,10 @@ class MusicProvider with ChangeNotifier {
           ignoreCase: true,
         );
         _localSongs = songs.where((item) => (item.isMusic == true) && (item.duration ?? 0) > 10000).map((item) {
+
+          final contentUri = "content://media/external/audio/media/${item.id}";
           return Song(
-            id: item.data, 
+            id: contentUri, 
             title: item.title,
             artist: item.artist ?? "Unknown",
             thumbUrl: "",
