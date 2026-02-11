@@ -9,12 +9,19 @@
 -keep class io.flutter.plugins.** { *; }
 
 # =========================================================
-# AUDIO ENGINE (JustAudio + AudioService)
+# AUDIO ENGINE (JustAudio + AudioService + ExoPlayer)
 # =========================================================
 -keep class com.ryanheise.just_audio.** { *; }
 -keep class com.ryanheise.audio_session.** { *; }
 -keep class com.ryanheise.just_audio_background.** { *; }
 -keep class com.ryanheise.audioservice.** { *; }
+
+# ⚠️ THE FIX: PREVENT SILENT CRASHES IN RELEASE ⚠️
+-keep class com.google.android.exoplayer2.** { *; }
+-keep class androidx.media3.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
 
 # =========================================================
 # LOCAL MUSIC & STORAGE
@@ -33,8 +40,7 @@
 -keep class io.flutter.plugins.GeneratedPluginRegistrant { *; }
 
 # =========================================================
-# ⚠️ THE FIX FOR YOUR ERROR ⚠️
-# Tell R8 to ignore missing Play Store classes
+# IGNORE HARMLESS WARNINGS
 # =========================================================
 -dontwarn com.google.android.play.core.**
 -dontwarn io.flutter.embedding.engine.deferredcomponents.**
