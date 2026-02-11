@@ -18,7 +18,7 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # 🛡️ THE MONOLITH GENERATION (Namespace + JVM + ProGuard Fix)
+      # 🛡️ THE MONOLITH GENERATION (Namespace + JVM + ProGuard)
       # ---------------------------------------------------
       - name: 🏗️ Reconstructing Android Project
         run: |
@@ -30,6 +30,7 @@ jobs:
           rm -f android/gradle/wrapper/gradle-wrapper.properties
 
           # ⚠️ 1.5 INJECT PROGUARD RULES (The "Anti-Blink" Fix)
+          # This tells the compiler: "DO NOT DELETE THE AUDIO ENGINE"
           echo '-keep class com.ryanheise.** { *; }
           -keep class com.google.android.exoplayer2.** { *; }
           -keep class androidx.media.** { *; }
@@ -53,7 +54,7 @@ jobs:
           }
           include ":app"' > android/settings.gradle
 
-          # 3. ROOT BUILD.GRADLE (The Namespace & JVM Injector 👮)
+          # 3. ROOT BUILD.GRADLE
           echo 'allprojects {
               repositories { google(); mavenCentral() }
           }
@@ -106,6 +107,7 @@ jobs:
                   release {
                       signingConfig signingConfigs.debug
                       minifyEnabled true
+                      // ⚠️ LINKING THE RULES WE CREATED ABOVE
                       proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
                   }
               }
