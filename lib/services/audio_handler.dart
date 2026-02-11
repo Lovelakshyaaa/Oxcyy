@@ -91,7 +91,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
           headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
         ));
       } else {
-        await _player.setAudioSource(AudioSource.uri(Uri.file(item.id)));
+        await _player.setAudioSource(AudioSource.uri(Uri.parse(item.id)));
       }
       await _player.play();
     } catch (e) {
