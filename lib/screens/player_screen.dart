@@ -46,6 +46,7 @@ class SmartPlayer extends StatelessWidget {
           keepOldArtwork: true,
           quality: 100,
           size: 1000,
+          format: ArtworkFormat.PNG
           // ⚠️ FIX FOR BLURRY ART
           artworkQuality: FilterQuality.high,
           artworkHeight: highRes ? 1000 : 200,
