@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-// NO audio_session import needed anymore.
+import 'package:audio_session/audio_session.dart'; // <--- MANDATORY IMPORT
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -11,23 +11,58 @@ Future<AudioHandler> initAudioService() async {
       androidNotificationChannelName: 'Music Playback',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true,
+      // ⚠️ REQUIRED FOR ANDROID 13+ CONTROLS
+      androidShowNotificationBadge: true,
     ),
   );
 }
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
-  final _player = AudioPlayer(); // Standard player, no fancy config
+  final _player = AudioPlayer();
 
   MyAudioHandler() {
-    // Just listen to events. No setup. No config.
+    _init();
+    
+    // Broadcast playback events to UI
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
-
-    // Fix duration for slider
+    
+    // Sync duration
     _player.durationStream.listen((duration) {
-      if (duration != null) {
-        final currentItem = mediaItem.value;
-        if (currentItem != null) {
-          mediaItem.add(currentItem.copyWith(duration: duration));
+       final index = _player.currentIndex;
+       final newDuration = duration ?? Duration.zero;
+       if (mediaItem.value != null && newDuration > Duration.zero) {
+         mediaItem.add(mediaItem.value!.copyWith(duration: newDuration));
+       }
+    });
+  }
+
+  Future<void> _init() async {
+    // ⚠️ THE MISSING LINK: Audio Session Management
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+    
+    // Handle unplugging headphones / call interruptions
+    session.interruptionEventStream.listen((event) {
+      if (event.begin) {
+        switch (event.type) {
+          case AudioInterruptionType.duck:
+            _player.setVolume(0.5);
+            break;
+          case AudioInterruptionType.pause:
+          case AudioInterruptionType.unknown:
+            _player.pause();
+            break;
+        }
+      } else {
+        switch (event.type) {
+          case AudioInterruptionType.duck:
+            _player.setVolume(1.0);
+            break;
+          case AudioInterruptionType.pause:
+            _player.play(); // Auto-resume
+            break;
+          case AudioInterruptionType.unknown:
+            break;
         }
       }
     });
@@ -50,14 +85,22 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     mediaItem.add(item);
     try {
       if (item.id.startsWith('http')) {
-        await _player.setUrl(item.id);
+        // ⚠️ GATEKEPT TIP: Headers to bypass 403/Throttling
+        await _player.setAudioSource(AudioSource.uri(
+          Uri.parse(item.id),
+          headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
+        ));
       } else {
-        // Simple URI source for local files
         await _player.setAudioSource(AudioSource.uri(Uri.file(item.id)));
       }
       await _player.play();
     } catch (e) {
       print("Handler Error: $e");
+      // Notify UI of error state
+      playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.error,
+        errorMessage: e.toString(),
+      ));
     }
   }
 
@@ -71,6 +114,8 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
       ],
       systemActions: const {
         MediaAction.seek,
+        MediaAction.seekForward,
+        MediaAction.seekBackward,
       },
       androidCompactActionIndices: const [0, 1, 3],
       processingState: const {
