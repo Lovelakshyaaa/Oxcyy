@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:audio_session/audio_session.dart'; // <--- MANDATORY IMPORT
+import 'package:audio_session/audio_session.dart'; // <--- MANDATORY IMPORT 
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -11,7 +11,7 @@ Future<AudioHandler> initAudioService() async {
       androidNotificationChannelName: 'Music Playback',
       androidNotificationIcon: 'mipmap/ic_launcher',
       androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
+      androidStopForegroundOnPause: true, // 
       // ⚠️ REQUIRED FOR ANDROID 13+ CONTROLS
       androidShowNotificationBadge: true,
     ),
@@ -24,12 +24,11 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   MyAudioHandler() {
     _init();
     
-    // Broadcast playback events to UI
+    // Broadcast playback events to UI [cite: 618]
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
     
     // Sync duration
     _player.durationStream.listen((duration) {
-       final index = _player.currentIndex;
        final newDuration = duration ?? Duration.zero;
        if (mediaItem.value != null && newDuration > Duration.zero) {
          mediaItem.add(mediaItem.value!.copyWith(duration: newDuration));
@@ -38,11 +37,11 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   Future<void> _init() async {
-    // ⚠️ THE MISSING LINK: Audio Session Management
+    // ⚠️ THE MISSING LINK: Audio Session Management 
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
     
-    // Handle unplugging headphones / call interruptions
+    // Handle unplugging headphones / call interruptions [cite: 627, 628]
     session.interruptionEventStream.listen((event) {
       if (event.begin) {
         switch (event.type) {
@@ -85,6 +84,11 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> playMediaItem(MediaItem item) async {
     mediaItem.add(item);
     try {
+      // 1. Force the notification to show "Loading..." immediately to stop UI freeze
+      playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.loading,
+      ));
+
       if (item.id.startsWith('http')) {
         // ⚠️ GATEKEPT TIP: Headers to bypass 403/Throttling
         await _player.setAudioSource(AudioSource.uri(
@@ -92,15 +96,24 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
           headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
         ));
       } else {
+        // Handle Content URIs correctly for Android 13+
         await _player.setAudioSource(AudioSource.uri(Uri.parse(item.id)));
       }
       await _player.play();
     } catch (e) {
       print("Handler Error: $e");
-      // Notify UI of error state
+
+      // ⚠️ THE LOCK SCREEN REPORTER ⚠️
+      // This changes the song title in the notification to the EXACT error.
+      mediaItem.add(item.copyWith(
+        title: "ERR: ${e.toString().split(':').last.trim().substring(0, 15)}", 
+        artist: "Debug: ${e.toString().substring(0, 30)}",
+      ));
+
+      // Reset state to ready (but not playing) so the error notification stays visible
       playbackState.add(playbackState.value.copyWith(
-        processingState: AudioProcessingState.error,
-        errorMessage: e.toString(),
+        processingState: AudioProcessingState.idle,
+        playing: false,
       ));
     }
   }
