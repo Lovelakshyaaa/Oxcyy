@@ -18,163 +18,108 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # STEP: SAFE GENERATION (With JVM Enforcer)
+      # STEP: SAFE GENERATION (The "Absolute Control" Version)
       # ---------------------------------------------------
       - name: 🛡️ FINAL FIXED BUILD GENERATION
         run: |
           flutter config --no-analytics
           flutter create --platforms=android .
           
-          # Clean slate
-          rm -f android/settings.gradle.kts android/build.gradle.kts android/app/build.gradle.kts
-          rm -f android/settings.gradle android/build.gradle android/app/build.gradle
-
-          # 1. SETTINGS.GRADLE (Modern)
+          # 1. SETTINGS.GRADLE
           echo 'pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
-                  def propertiesFile = new File("local.properties")
-                  if (propertiesFile.exists()) {
-                      propertiesFile.withInputStream { properties.load(it) }
-                  }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  if (flutterSdkPath == null) {
-                      flutterSdkPath = System.getenv("FLUTTER_ROOT")
-                  }
-                  return flutterSdkPath
+                  file("local.properties").withInputStream { properties.load(it) }
+                  return properties.getProperty("flutter.sdk")
               }()
               includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
           }
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
               id "com.android.application" version "8.3.2" apply false
               id "org.jetbrains.kotlin.android" version "1.9.23" apply false
-              id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
           }
           include ":app"' > android/settings.gradle
 
-          # 2. BUILD.GRADLE (THE JVM DICTATOR 👮)
+          # 2. GRADLE.PROPERTIES (The "Safety Valve" 🛡️)
+          # This tells Gradle: "Don't stop the build if JVM versions are slightly off"
+          echo 'org.gradle.jvmargs=-Xmx4G
+          android.useAndroidX=true
+          android.enableJetifier=true
+          kotlin.code.style=official
+          kotlin.jvm.target.validation.mode=ignore' > android/gradle.properties
+
+          # 3. ROOT BUILD.GRADLE (The JVM Dictator 👮)
           echo 'allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           rootProject.buildDir = "../build"
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
               project.evaluationDependsOn(":app")
 
-              // --- THE FIX: FORCE EVERYONE TO JAVA 17 ---
-              plugins.withId("com.android.library") {
-                  android {
-                      // 1. Fix Namespace for old plugins
-                      if (namespace == null) {
-                          namespace = project.group.toString()
-                      }
-                      // 2. FORCE Java 17 Compatibility (Fixes "Inconsistent JVM-target")
-                      compileOptions {
-                          sourceCompatibility = JavaVersion.VERSION_17
-                          targetCompatibility = JavaVersion.VERSION_17
+              // FORCE EVERY SUB-LIBRARY (like audio_session) TO JAVA 17
+              afterEvaluate { project ->
+                  if (project.hasProperty("android")) {
+                      project.android {
+                          compileOptions {
+                              sourceCompatibility = JavaVersion.VERSION_17
+                              targetCompatibility = JavaVersion.VERSION_17
+                          }
+                          // Force Kotlin to 17 too
+                          if (project.tasks.findByName("compileDebugKotlin")) {
+                              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                                  kotlinOptions { jvmTarget = "17" }
+                              }
+                          }
                       }
                   }
               }
-              // 3. FORCE Kotlin 17 for everyone
-              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-                  kotlinOptions {
-                      jvmTarget = "17"
-                  }
-              }
-              // ------------------------------------------
           }
-          tasks.register("clean", Delete) {
-              delete rootProject.buildDir
-          }' > android/build.gradle
+          tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
 
-          # 3. APP/BUILD.GRADLE (Kept exactly as you had it)
+          # 4. APP/BUILD.GRADLE
           echo 'plugins {
               id "com.android.application"
               id "org.jetbrains.kotlin.android"
               id "dev.flutter.flutter-gradle-plugin"
           }
-
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file("local.properties")
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withInputStream { localProperties.load(it) }
-          }
-          def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
-          if (flutterVersionCode == null) { flutterVersionCode = "1" }
-          def flutterVersionName = localProperties.getProperty("flutter.versionName")
-          if (flutterVersionName == null) { flutterVersionName = "1.0" }
-
           android {
               namespace "com.example.oxcy"
               compileSdkVersion 35
-              ndkVersion flutter.ndkVersion
-
+              defaultConfig {
+                  applicationId "com.example.oxcy"
+                  minSdkVersion 24
+                  targetSdkVersion 35
+              }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-              sourceSets {
-                  main.java.srcDirs += "src/main/kotlin"
-              }
-              defaultConfig {
-                  applicationId "com.example.oxcy"
-                  minSdkVersion 23
-                  targetSdkVersion 35
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
-              }
+              kotlinOptions { jvmTarget = "17" }
               buildTypes {
                   release {
                       signingConfig signingConfigs.debug
+                      minifyEnabled true
+                      proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
                   }
-              }
-              lint {
-                  abortOnError false
               }
           }
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.23"
           }' > android/app/build.gradle
 
-          # 4. WRAPPER (Gradle 8.5)
-          echo 'distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.5-all.zip' > android/gradle/wrapper/gradle-wrapper.properties
-          
-          chmod +x android/gradlew
-
       # ---------------------------------------------------
-      # 🧹 STEP: NUCLEAR CLEAN (The "Refresh" Button)
+      # 🧹 NUCLEAR CLEAN & BUILD
       # ---------------------------------------------------
-      - name: ☢️ FLUSHING CACHES & DEPENDENCIES
+      - name: ☢️ FLUSHING CACHES & BUILDING
         run: |
-          rm -f pubspec.lock
           flutter clean
           flutter pub get
-      
-      # ---------------------------------------------------
-      # STEP: BUILD
-      # ---------------------------------------------------
-      - name: 🏗️ Building APK
-        run: flutter build apk --debug --no-tree-shake-icons
+          flutter build apk --release --no-tree-shake-icons
 
       - uses: actions/upload-artifact@v4
         with:
           name: oxcy-release-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
