@@ -63,6 +63,12 @@ class MusicProvider with ChangeNotifier {
   Future<void> init() async {
     if (_isInitialized) return;
     try {
+      // ⚠️ THE NOTIFICATION REQUEST BLOCK ⚠️
+      // Required for Android 13+ to show playback controls
+      if (await Permission.notification.isDenied) {
+        await Permission.notification.request();
+      }
+
       _audioHandler = await initAudioService();
       
       _audioHandler!.playbackState.listen((state) {
@@ -140,7 +146,6 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> play(Song song) async {
-    // 1. FORCE UI UP NOW
     if (song.type == 'local') {
       _queue = _localSongs;
     } else {
@@ -154,7 +159,6 @@ class MusicProvider with ChangeNotifier {
     _isBuffering = true;
     notifyListeners();
 
-    // 2. Init if needed
     if (_audioHandler == null) await init();
     if (_audioHandler == null) return;
 
