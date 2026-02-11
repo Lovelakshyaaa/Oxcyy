@@ -44,6 +44,8 @@ class SmartPlayer extends StatelessWidget {
           id: song.localId!,
           type: ArtworkType.AUDIO,
           keepOldArtwork: true,
+          quality: 100,
+          size: 1000,
           // ⚠️ FIX FOR BLURRY ART
           artworkQuality: FilterQuality.high,
           artworkHeight: highRes ? 1000 : 200,
