@@ -9,6 +9,7 @@ Future<AudioHandler> initAudioService() async {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.example.oxcy.channel.audio',
       androidNotificationChannelName: 'Music Playback',
+      androidNotificationIcon: 'mipmap/ic_launcher',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true,
       // ⚠️ REQUIRED FOR ANDROID 13+ CONTROLS
