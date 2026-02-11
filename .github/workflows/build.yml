@@ -18,14 +18,14 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # STEP: SAFE GENERATION (The "Absolute Control" Version)
+      # STEP: BULLETPROOF CONFIG (No afterEvaluate)
       # ---------------------------------------------------
-      - name: 🛡️ FINAL FIXED BUILD GENERATION
+      - name: 🛡️ CONFIG GENERATION
         run: |
           flutter config --no-analytics
           flutter create --platforms=android .
           
-          # 1. SETTINGS.GRADLE
+          # 1. SETTINGS.GRADLE (Standard)
           echo 'pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
@@ -42,39 +42,33 @@ jobs:
           }
           include ":app"' > android/settings.gradle
 
-          # 2. GRADLE.PROPERTIES (The "Safety Valve" 🛡️)
-          # This tells Gradle: "Don't stop the build if JVM versions are slightly off"
+          # 2. GRADLE.PROPERTIES (The Force Move)
           echo 'org.gradle.jvmargs=-Xmx4G
           android.useAndroidX=true
           android.enableJetifier=true
-          kotlin.code.style=official
           kotlin.jvm.target.validation.mode=ignore' > android/gradle.properties
 
-          # 3. ROOT BUILD.GRADLE (The JVM Dictator 👮)
+          # 3. ROOT BUILD.GRADLE (The Safe Dictator 👮)
           echo 'allprojects {
               repositories { google(); mavenCentral() }
           }
           rootProject.buildDir = "../build"
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
-              project.evaluationDependsOn(":app")
-
-              // FORCE EVERY SUB-LIBRARY (like audio_session) TO JAVA 17
-              afterEvaluate { project ->
-                  if (project.hasProperty("android")) {
-                      project.android {
-                          compileOptions {
-                              sourceCompatibility = JavaVersion.VERSION_17
-                              targetCompatibility = JavaVersion.VERSION_17
-                          }
-                          // Force Kotlin to 17 too
-                          if (project.tasks.findByName("compileDebugKotlin")) {
-                              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-                                  kotlinOptions { jvmTarget = "17" }
-                              }
-                          }
+              
+              // ✅ SAFE ALTERNATIVE TO afterEvaluate
+              // This waits for the Android plugin to load naturally
+              plugins.withType(com.android.build.gradle.BasePlugin) {
+                  project.android {
+                      compileOptions {
+                          sourceCompatibility = JavaVersion.VERSION_17
+                          targetCompatibility = JavaVersion.VERSION_17
                       }
                   }
+              }
+              // This waits for Kotlin to load naturally
+              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                  kotlinOptions { jvmTarget = "17" }
               }
           }
           tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
@@ -105,15 +99,9 @@ jobs:
                       proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
                   }
               }
-          }
-          dependencies {
-              implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.23"
           }' > android/app/build.gradle
 
-      # ---------------------------------------------------
-      # 🧹 NUCLEAR CLEAN & BUILD
-      # ---------------------------------------------------
-      - name: ☢️ FLUSHING CACHES & BUILDING
+      - name: ☢️ FINAL CLEAN & BUILD
         run: |
           flutter clean
           flutter pub get
