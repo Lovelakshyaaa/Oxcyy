@@ -18,7 +18,7 @@ jobs:
           channel: 'stable'
 
       # ---------------------------------------------------
-      # 🛡️ THE MONOLITH GENERATION (Namespace + JVM Fix)
+      # 🛡️ THE MONOLITH GENERATION (Namespace + JVM + ProGuard Fix)
       # ---------------------------------------------------
       - name: 🏗️ Reconstructing Android Project
         run: |
@@ -28,6 +28,13 @@ jobs:
           # 1. Clean old files
           rm -f android/settings.gradle android/build.gradle android/app/build.gradle
           rm -f android/gradle/wrapper/gradle-wrapper.properties
+
+          # ⚠️ 1.5 INJECT PROGUARD RULES (The "Anti-Blink" Fix)
+          echo '-keep class com.ryanheise.** { *; }
+          -keep class com.google.android.exoplayer2.** { *; }
+          -keep class androidx.media.** { *; }
+          -keep class android.support.v4.media.** { *; }
+          -dontwarn com.ryanheise.**' > android/app/proguard-rules.pro
 
           # 2. SETTINGS.GRADLE
           echo 'pluginManagement {
