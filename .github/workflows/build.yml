@@ -172,9 +172,9 @@ jobs:
       # STEP: BUILD
       # ---------------------------------------------------
       - name: 🏗️ Building APK
-        run: flutter build apk --release --no-tree-shake-icons
+        run: flutter build apk --debug --no-tree-shake-icons
 
       - uses: actions/upload-artifact@v4
         with:
           name: oxcy-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
