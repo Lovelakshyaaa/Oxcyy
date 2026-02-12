@@ -115,8 +115,9 @@ class _MainScaffoldState extends State<MainScaffold> {
                   right: 0, 
                   bottom: provider.isPlayerExpanded ? 0 : 85,
                   top: provider.isPlayerExpanded ? 0 : null,
-                  // ⚠️ THE FIX: Pass the 'handler' to the SmartPlayer constructor
-                  child: SmartPlayer(audioHandler: handler),
+                  // *** THE FIX IS HERE ***
+                  // The audioHandler parameter has been removed.
+                  child: SmartPlayer(),
                 );
               }
             ),
