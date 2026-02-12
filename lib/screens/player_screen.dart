@@ -60,17 +60,31 @@ class SmartPlayer extends StatelessWidget {
   }
 
   Widget _buildArtwork(Song song, double size, {bool highRes = false}) {
-    if (song.type == 'local' && song.localId != null) {
+    // ⚠️ FIREBASE FIX: Retrieve the Secure Artwork ID from MediaItem Extras
+    int? artworkId = song.localId;
+    
+    // We try to grab the exact ID from the engine's current item
+    if (audioHandler is BaseAudioHandler) {
+       final currentItem = (audioHandler as BaseAudioHandler).mediaItem.value;
+       if (currentItem != null && currentItem.extras?['artworkId'] != null) {
+         artworkId = currentItem.extras!['artworkId'] as int;
+       }
+    }
+
+    if (song.type == 'local' && artworkId != null) {
       return SizedBox(
         width: size, height: size,
         child: QueryArtworkWidget(
-          id: song.localId!,
+          // *** THIS IS THE CRITICAL FIX ***
+          id: artworkId, 
           type: ArtworkType.AUDIO,
           keepOldArtwork: false,
           quality: 100,
           size: 1000,
           format: ArtworkFormat.PNG,
-          key: ValueKey(song.localId.toString() + "_highres"),
+          key: ValueKey(artworkId.toString() + "_highres"),
+          
+          // ⚠️ FIX FOR BLURRY ART
           artworkQuality: FilterQuality.high,
           artworkHeight: highRes ? 1000 : 200,
           artworkWidth: highRes ? 1000 : 200,
