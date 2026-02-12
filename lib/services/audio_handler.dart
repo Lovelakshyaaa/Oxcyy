@@ -1,4 +1,4 @@
-import 'package:flutter/services.dart'; // <--- NEW IMPORT FOR CLIPBOARD
+import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart'; 
@@ -12,7 +12,6 @@ Future<AudioHandler> initAudioService() async {
       androidNotificationIcon: 'mipmap/ic_launcher',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true, 
-      // ⚠️ REQUIRED FOR ANDROID 13+ CONTROLS
       androidShowNotificationBadge: true,
     ),
   );
@@ -20,31 +19,38 @@ Future<AudioHandler> initAudioService() async {
 
 class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   final _player = AudioPlayer();
+  // ⚠️ THE FIX: A managed playlist container
+  final _playlist = ConcatenatingAudioSource(children: []);
 
   MyAudioHandler() {
     _init();
     
-    // ⚠️ THE FIX: REMOVED .pipe()
-    // We listen manually so we can also add our own events (like Loading/Error)
+    // Broadcast playback events
     _player.playbackEventStream.map(_transformEvent).listen((playbackEvent) {
       playbackState.add(playbackEvent);
     });
     
-    // Sync duration
-    _player.durationStream.listen((duration) {
-       final newDuration = duration ?? Duration.zero;
-       if (mediaItem.value != null && newDuration > Duration.zero) {
-         mediaItem.add(mediaItem.value!.copyWith(duration: newDuration));
-       }
+    // ⚠️ THE FIX: Automatically update MediaItem from the player's current tag
+    _player.sequenceStateStream.listen((sequenceState) {
+      final currentItem = sequenceState?.currentSource?.tag as MediaItem?;
+      if (currentItem != null) {
+        mediaItem.add(currentItem);
+      }
     });
   }
 
   Future<void> _init() async {
-    // ⚠️ THE MISSING LINK: Audio Session Management 
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
+
+    // ⚠️ THE FIX: Initialize the player with the playlist ONCE
+    // We will never call setAudioSource again; we will just modify the playlist.
+    try {
+      await _player.setAudioSource(_playlist);
+    } catch (e) {
+      print("Error setting source: $e");
+    }
     
-    // Handle unplugging headphones / call interruptions
     session.interruptionEventStream.listen((event) {
       if (event.begin) {
         switch (event.type) {
@@ -62,7 +68,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
             _player.setVolume(1.0);
             break;
           case AudioInterruptionType.pause:
-            _player.play(); // Auto-resume
+            _player.play();
             break;
           case AudioInterruptionType.unknown:
             break;
@@ -85,40 +91,42 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> playMediaItem(MediaItem item) async {
-    mediaItem.add(item);
-    try {
-      // 1. Force the notification to show "Loading..." immediately to stop UI freeze
-      playbackState.add(playbackState.value.copyWith(
-        processingState: AudioProcessingState.loading,
-      ));
+    // Notify UI immediately
+    mediaItem.add(item); 
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.loading,
+    ));
 
+    try {
+      AudioSource source;
       if (item.id.startsWith('http')) {
-        // ⚠️ GATEKEPT TIP: Headers to bypass 403/Throttling
-        await _player.setAudioSource(AudioSource.uri(
+        source = AudioSource.uri(
           Uri.parse(item.id),
           headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
-        ));
+          tag: item, // ⚠️ Tagging is crucial for sequenceStateStream
+        );
       } else {
-        // Use LockCachingAudioSource for local files
-        await _player.setAudioSource(LockCachingAudioSource(Uri.parse(item.id)));
+        source = LockCachingAudioSource(
+          Uri.parse(item.id),
+          tag: item, // ⚠️ Tagging is crucial
+        );
       }
+      
+      // ⚠️ THE FIX: Manipulate the playlist instead of replacing the root source
+      await _playlist.clear();
+      await _playlist.add(source);
       await _player.play();
+      
     } catch (e) {
       print("Handler Error: $e");
-
-      // ⚠️ THE CLIPBOARD TRAP ⚠️
-      // This forces the error into your copy-paste buffer
       String errorMsg = "DEBUG_ERR: $e";
       await Clipboard.setData(ClipboardData(text: errorMsg));
-
-      // ⚠️ THE LOCK SCREEN REPORTER ⚠️
-      // This changes the song title in the notification to the EXACT error.
+      
       mediaItem.add(item.copyWith(
         title: "ERR: ${e.toString().split(':').last.trim().substring(0, 15)}", 
         artist: "Debug: ${e.toString().substring(0, 30)}",
       ));
-
-      // Reset state to ready (but not playing) so the error notification stays visible
+      
       playbackState.add(playbackState.value.copyWith(
         processingState: AudioProcessingState.idle,
         errorMessage: errorMsg,
