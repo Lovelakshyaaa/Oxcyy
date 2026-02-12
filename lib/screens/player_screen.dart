@@ -5,21 +5,22 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
-import 'package:audio_service/audio_service.dart'; // ⚠️ Added for streams
+import 'package:audio_service/audio_service.dart'; // ⚠️ Required for AudioHandler
 import 'package:oxcy/providers/music_provider.dart';
 
 class SmartPlayer extends StatelessWidget {
-  // We don't need to pass audioHandler in constructor if we get it from provider
-  // But using a getter is safer.
-  
+  // ⚠️ THIS IS THE MISSING PIECE ⚠️
+  // The compiler failed because this variable and constructor were missing.
+  final AudioHandler audioHandler;
+
+  const SmartPlayer({Key? key, required this.audioHandler}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<MusicProvider>(context);
-    // ⚠️ CRITICAL: Get the handler. If null, UI waits.
-    final handler = provider.audioHandler; 
     final song = provider.currentSong;
 
-    if (song == null || !provider.isMiniPlayerVisible) return SizedBox.shrink();
+    if (song == null) return SizedBox.shrink();
 
     final double screenHeight = MediaQuery.of(context).size.height;
     final double height = provider.isPlayerExpanded ? screenHeight : 70.0;
@@ -35,25 +36,24 @@ class SmartPlayer extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // ⚠️ Wrap content in StreamBuilder to catch PlaybackState changes instantly
-          if (handler != null)
-             StreamBuilder<PlaybackState>(
-               stream: handler.playbackState,
-               builder: (context, snapshot) {
-                 final state = snapshot.data;
-                 final processingState = state?.processingState ?? AudioProcessingState.idle;
-                 final playing = state?.playing ?? false;
-                 
-                 return Stack(
-                    children: [
-                        if (provider.isPlayerExpanded) 
-                            _buildFullScreen(context, provider, song, handler, playing, processingState),
-                        if (!provider.isPlayerExpanded) 
-                            _buildMiniPlayer(context, provider, song, handler, playing, processingState),
-                    ]
-                 );
-               }
-             ),
+           // ⚠️ WE LISTEN TO THE ENGINE DIRECTLY HERE
+           StreamBuilder<PlaybackState>(
+             stream: audioHandler.playbackState,
+             builder: (context, snapshot) {
+               final state = snapshot.data;
+               final processingState = state?.processingState ?? AudioProcessingState.idle;
+               final playing = state?.playing ?? false;
+               
+               return Stack(
+                  children: [
+                      if (provider.isPlayerExpanded) 
+                          _buildFullScreen(context, provider, song, audioHandler, playing, processingState),
+                      if (!provider.isPlayerExpanded) 
+                          _buildMiniPlayer(context, provider, song, audioHandler, playing, processingState),
+                  ]
+               );
+             }
+           ),
         ],
       ),
     );
@@ -90,9 +90,7 @@ class SmartPlayer extends StatelessWidget {
     }
   }
 
-  // ⚠️ ADDED: handler, playing, processingState
   Widget _buildMiniPlayer(BuildContext context, MusicProvider provider, Song song, AudioHandler handler, bool playing, AudioProcessingState processingState) {
-    // Determine loading state from REAL engine status, not provider
     final bool isLoading = processingState == AudioProcessingState.loading || 
                            processingState == AudioProcessingState.buffering;
 
@@ -119,7 +117,7 @@ class SmartPlayer extends StatelessWidget {
               ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : IconButton(
                   icon: Icon(playing ? Icons.pause : Icons.play_arrow, color: Colors.white), 
-                  onPressed: () => playing ? handler.pause() : handler.play() // Direct control
+                  onPressed: () => playing ? handler.pause() : handler.play()
                 ),
           ],
         ),
@@ -127,7 +125,6 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // ⚠️ ADDED: handler, playing, processingState
   Widget _buildFullScreen(BuildContext context, MusicProvider provider, Song song, AudioHandler handler, bool playing, AudioProcessingState processingState) {
     final bool isLoading = processingState == AudioProcessingState.loading || 
                            processingState == AudioProcessingState.buffering;
@@ -166,12 +163,11 @@ class SmartPlayer extends StatelessWidget {
                       Text(song.artist, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16)),
                       SizedBox(height: 10),
                       
-                      // ⚠️ REAL-TIME SEEK BAR
+                      // REAL-TIME SEEK BAR
                       StreamBuilder<Duration>(
                         stream: AudioService.position,
                         builder: (context, snapshot) {
                           final position = snapshot.data ?? Duration.zero;
-                          // Use provider duration as fallback or get from stream if available
                           final duration = provider.duration.inMilliseconds > 0 ? provider.duration : Duration(seconds: 1);
                           
                           return Padding(
