@@ -24,8 +24,11 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
   MyAudioHandler() {
     _init();
     
-    // Broadcast playback events to UI
-    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+    // ⚠️ THE FIX: REMOVED .pipe()
+    // We listen manually so we can also add our own events (like Loading/Error)
+    _player.playbackEventStream.map(_transformEvent).listen((playbackEvent) {
+      playbackState.add(playbackEvent);
+    });
     
     // Sync duration
     _player.durationStream.listen((duration) {
