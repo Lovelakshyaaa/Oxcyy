@@ -29,6 +29,10 @@ class Song {
 
 class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
+  
+  // ⚠️ THE FIX: Expose the handler so screens can listen to it directly
+  AudioHandler? get audioHandler => _audioHandler; 
+
   final _yt = yt.YoutubeExplode();
   
   List<Song> _localSongs = [];
@@ -63,8 +67,6 @@ class MusicProvider with ChangeNotifier {
   Future<void> init() async {
     if (_isInitialized) return;
     try {
-      // ⚠️ THE NOTIFICATION REQUEST BLOCK ⚠️
-      // Required for Android 13+ to show playback controls
       if (await Permission.notification.isDenied) {
         await Permission.notification.request();
       }
