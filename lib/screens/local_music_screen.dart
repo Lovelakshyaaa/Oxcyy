@@ -129,15 +129,21 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
                       // ⚠️ THE FIX: DIRECT INJECTION INTO AUDIO HANDLER
                       onTap: () async {
                         if (handler != null) {
-                          // 1. Create the MediaItem locally
+                          // 1. Create the MediaItem locally with the Fix applied
                           final mediaItem = MediaItem(
-                            id: "content://media/external/audio/media/${song.id}", // Critical for LockCaching
-                            album: song.album ?? "Local Music",
+                            // Use song.uri (with fallback) to prevent path issues
+                            id: song.uri ?? "content://media/external/audio/media/${song.id}", 
                             title: song.title,
-                            artist: song.artist ?? "Unknown",
+                            artist: song.artist ?? "Unknown Artist",
                             duration: Duration(milliseconds: song.duration ?? 0),
-                            artUri: Uri.parse("content://media/external/audio/media/${song.id}/albumart"),
-                            extras: {'localId': song.id},
+                            genre: 'local', // Required for fix
+                            
+                            // *** CRITICAL CHANGE: Adding artworkId ***
+                            // We keep localId too so your PlayerScreen doesn't break
+                            extras: {
+                              'artworkId': song.id, 
+                              'localId': song.id
+                            },
                           );
 
                           // 2. Send directly to Engine (Bypassing Provider Logic)
