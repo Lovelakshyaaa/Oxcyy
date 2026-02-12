@@ -1,14 +1,59 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'player_screen.dart'; // ⚠️ Make sure this import is here
+import 'player_screen.dart'; // To open the player
 
-class LocalMusicScreen extends StatelessWidget {
+class LocalMusicScreen extends StatefulWidget {
+  @override
+  _LocalMusicScreenState createState() => _LocalMusicScreenState();
+}
+
+class _LocalMusicScreenState extends State<LocalMusicScreen> {
+  final OnAudioQuery _audioQuery = OnAudioQuery();
+  List<SongModel> _songs = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSongs();
+  }
+
+  Future<void> _fetchSongs() async {
+    try {
+      // 1. Request Permissions (Android 13+ friendly)
+      if (await Permission.audio.request().isGranted || 
+          await Permission.storage.request().isGranted) {
+        
+        // 2. Query Songs Direct from Storage
+        List<SongModel> songs = await _audioQuery.querySongs(
+          sortType: SongSortType.DATE_ADDED,
+          orderType: OrderType.DESC_OR_GREATER,
+          uriType: UriType.EXTERNAL,
+          ignoreCase: true,
+        );
+
+        // 3. Filter short audio (under 10s)
+        setState(() {
+          _songs = songs.where((i) => (i.isMusic == true) && (i.duration ?? 0) > 10000).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Error fetching songs: $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<MusicProvider>(context);
+    // We only use Provider to get the HEADER (The AudioHandler instance)
+    // We do NOT use it for logic anymore.
+    final handler = Provider.of<MusicProvider>(context, listen: false).audioHandler;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -21,9 +66,9 @@ class LocalMusicScreen extends StatelessWidget {
               child: Text("My Music", style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
             
-            if (provider.isFetchingLocal)
-              Expanded(child: Center(child: CircularProgressIndicator()))
-            else if (provider.localSongs.isEmpty)
+            if (_isLoading)
+              Expanded(child: Center(child: CircularProgressIndicator(color: Colors.white)))
+            else if (_songs.isEmpty)
               Expanded(
                 child: Center(
                   child: Column(
@@ -33,8 +78,8 @@ class LocalMusicScreen extends StatelessWidget {
                       SizedBox(height: 10),
                       Text("No local songs found", style: TextStyle(color: Colors.white54)),
                       TextButton(
-                        onPressed: provider.fetchLocalSongs, 
-                        child: Text("Refresh")
+                        onPressed: _fetchSongs, 
+                        child: Text("Refresh", style: TextStyle(color: Colors.purpleAccent))
                       )
                     ],
                   ),
@@ -44,33 +89,31 @@ class LocalMusicScreen extends StatelessWidget {
               Expanded(
                 child: ListView.builder(
                   padding: EdgeInsets.only(bottom: 100), 
-                  itemCount: provider.localSongs.length,
+                  itemCount: _songs.length,
                   itemBuilder: (context, index) {
-                    final song = provider.localSongs[index];
+                    final song = _songs[index];
                     return ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      
+                      // ALBUM ART
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
                           width: 50, 
                           height: 50,
                           child: QueryArtworkWidget(
-                            id: song.localId!,
+                            id: song.id,
                             type: ArtworkType.AUDIO,
                             keepOldArtwork: true, 
                             nullArtworkWidget: Container(
                               color: Colors.white10,
                               child: Icon(Icons.music_note, color: Colors.white),
                             ),
-                            errorBuilder: (context, exception, stackTrace) {
-                              return Container(
-                                color: Colors.white10,
-                                child: Icon(Icons.music_note, color: Colors.white),
-                              );
-                            },
                           ),
                         ),
                       ),
+                      
+                      // TITLE & ARTIST
                       title: Text(
                         song.title, 
                         maxLines: 1, 
@@ -78,20 +121,33 @@ class LocalMusicScreen extends StatelessWidget {
                         style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w500)
                       ),
                       subtitle: Text(
-                        song.artist, 
+                        song.artist ?? "Unknown", 
                         maxLines: 1, 
                         style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)
                       ),
+                      
+                      // ⚠️ THE FIX: DIRECT INJECTION INTO AUDIO HANDLER
                       onTap: () async {
-                        // 1. Start Playing
-                        await provider.play(song);
+                        if (handler != null) {
+                          // 1. Create the MediaItem locally
+                          final mediaItem = MediaItem(
+                            id: "content://media/external/audio/media/${song.id}", // Critical for LockCaching
+                            album: song.album ?? "Local Music",
+                            title: song.title,
+                            artist: song.artist ?? "Unknown",
+                            duration: Duration(milliseconds: song.duration ?? 0),
+                            artUri: Uri.parse("content://media/external/audio/media/${song.id}/albumart"),
+                            extras: {'localId': song.id},
+                          );
 
-                        // 2. ⚠️ THE FIX: Open the Connected Player Screen
-                        if (provider.audioHandler != null) {
+                          // 2. Send directly to Engine (Bypassing Provider Logic)
+                          await handler.playMediaItem(mediaItem);
+
+                          // 3. Open Player UI
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => SmartPlayer(audioHandler: provider.audioHandler!),
+                              builder: (context) => SmartPlayer(audioHandler: handler),
                             ),
                           );
                         }
