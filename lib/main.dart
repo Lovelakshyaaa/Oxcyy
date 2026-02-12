@@ -3,18 +3,37 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart'; 
+import 'package:audio_service/audio_service.dart'; // ⚠️ REQUIRED
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/local_music_screen.dart';
 import 'package:oxcy/screens/home_screen.dart'; 
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
 
-void main() {
+// ⚠️ MAKE MAIN ASYNC TO AWAIT INITIALIZATION
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. BOOTSTRAP: Initialize the Provider & Audio Service BEFORE the UI boots
+  final musicProvider = MusicProvider();
+  await musicProvider.init(); // This calls initAudioService() internally
+
+  // 2. EXTRACTION: Get the now-alive AudioHandler
+  final audioHandler = musicProvider.audioHandler;
+
+  if (audioHandler == null) {
+    print("CRITICAL: AudioHandler failed to initialize!");
+  }
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => MusicProvider()),
+        // 3. PROVIDE AUDIO HANDLER GLOBALLY (The Firebase Recommendation)
+        if (audioHandler != null)
+          Provider<AudioHandler>.value(value: audioHandler),
+        
+        // 4. PROVIDE THE INITIALIZED MUSIC PROVIDER
+        ChangeNotifierProvider<MusicProvider>.value(value: musicProvider),
       ],
       child: MyApp(),
     ),
@@ -51,7 +70,8 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    // We access provider to check if player should be visible for padding
+    // We try to get the AudioHandler to listen for REAL-TIME updates
+    final AudioHandler? handler = Provider.of<AudioHandler?>(context);
     final provider = Provider.of<MusicProvider>(context);
     
     return Scaffold(
@@ -79,19 +99,30 @@ class _MainScaffoldState extends State<MainScaffold> {
             children: _pages,
           ),
           
-          // 3. PLAYER (The Fix: It sits ABOVE content, BELOW Nav Bar)
-          // We use a safe area clamp to ensure it doesn't get hidden
-          if (provider.isMiniPlayerVisible)
-            Positioned(
-              left: 0, 
-              right: 0, 
-              bottom: provider.isPlayerExpanded ? 0 : 85, // 85 is Nav Bar height
-              top: provider.isPlayerExpanded ? 0 : null,
-              child: SmartPlayer(),
+          // 3. PLAYER (The Fix: Reactive Visibility)
+          // We use StreamBuilder to show the player INSTANTLY when a song loads
+          if (handler != null)
+            StreamBuilder<MediaItem?>(
+              stream: handler.mediaItem,
+              builder: (context, snapshot) {
+                // Show player if MediaItem exists OR if Provider thinks it should show
+                final bool showPlayer = snapshot.hasData || provider.isMiniPlayerVisible;
+                
+                if (!showPlayer) return SizedBox.shrink();
+
+                return Positioned(
+                  left: 0, 
+                  right: 0, 
+                  bottom: provider.isPlayerExpanded ? 0 : 85,
+                  top: provider.isPlayerExpanded ? 0 : null,
+                  // We can now rely on SmartPlayer finding the provided AudioHandler
+                  child: SmartPlayer(),
+                );
+              }
             ),
 
           // 4. CRYSTAL GLASS NAV BAR
-          if (!provider.isPlayerExpanded) // Hide Nav Bar when player is full screen
+          if (!provider.isPlayerExpanded) 
             Positioned(
               left: 0, right: 0, bottom: 0,
               child: _buildGlassNavBar(),
@@ -106,14 +137,14 @@ class _MainScaffoldState extends State<MainScaffold> {
       width: double.infinity,
       height: 85,
       borderRadius: 0,
-      blur: 10, // LOWER BLUR = CRYSTAL LOOK
+      blur: 10,
       alignment: Alignment.center,
-      border: 1, // Slight border for edge definition
+      border: 1, 
       linearGradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.white.withOpacity(0.1), // More transparent
+          Colors.white.withOpacity(0.1), 
           Colors.white.withOpacity(0.05),
         ],
       ),
