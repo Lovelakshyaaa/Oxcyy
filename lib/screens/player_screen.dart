@@ -5,12 +5,18 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
+import 'package:audio_service/audio_service.dart'; // ⚠️ Added for streams
 import 'package:oxcy/providers/music_provider.dart';
 
 class SmartPlayer extends StatelessWidget {
+  // We don't need to pass audioHandler in constructor if we get it from provider
+  // But using a getter is safer.
+  
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<MusicProvider>(context);
+    // ⚠️ CRITICAL: Get the handler. If null, UI waits.
+    final handler = provider.audioHandler; 
     final song = provider.currentSong;
 
     if (song == null || !provider.isMiniPlayerVisible) return SizedBox.shrink();
@@ -29,8 +35,25 @@ class SmartPlayer extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          if (provider.isPlayerExpanded) _buildFullScreen(context, provider, song),
-          if (!provider.isPlayerExpanded) _buildMiniPlayer(context, provider, song),
+          // ⚠️ Wrap content in StreamBuilder to catch PlaybackState changes instantly
+          if (handler != null)
+             StreamBuilder<PlaybackState>(
+               stream: handler.playbackState,
+               builder: (context, snapshot) {
+                 final state = snapshot.data;
+                 final processingState = state?.processingState ?? AudioProcessingState.idle;
+                 final playing = state?.playing ?? false;
+                 
+                 return Stack(
+                    children: [
+                        if (provider.isPlayerExpanded) 
+                            _buildFullScreen(context, provider, song, handler, playing, processingState),
+                        if (!provider.isPlayerExpanded) 
+                            _buildMiniPlayer(context, provider, song, handler, playing, processingState),
+                    ]
+                 );
+               }
+             ),
         ],
       ),
     );
@@ -48,8 +71,6 @@ class SmartPlayer extends StatelessWidget {
           size: 1000,
           format: ArtworkFormat.PNG,
           key: ValueKey(song.localId.toString() + "_highres"),
-          
-          // ⚠️ FIX FOR BLURRY ART
           artworkQuality: FilterQuality.high,
           artworkHeight: highRes ? 1000 : 200,
           artworkWidth: highRes ? 1000 : 200,
@@ -69,7 +90,12 @@ class SmartPlayer extends StatelessWidget {
     }
   }
 
-  Widget _buildMiniPlayer(BuildContext context, MusicProvider provider, Song song) {
+  // ⚠️ ADDED: handler, playing, processingState
+  Widget _buildMiniPlayer(BuildContext context, MusicProvider provider, Song song, AudioHandler handler, bool playing, AudioProcessingState processingState) {
+    // Determine loading state from REAL engine status, not provider
+    final bool isLoading = processingState == AudioProcessingState.loading || 
+                           processingState == AudioProcessingState.buffering;
+
     return GestureDetector(
       onTap: provider.togglePlayerView, 
       child: Container(
@@ -89,16 +115,23 @@ class SmartPlayer extends StatelessWidget {
                 ],
               ),
             ),
-            provider.isLoadingSong 
+            isLoading 
               ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : IconButton(icon: Icon(provider.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white), onPressed: provider.togglePlayPause),
+              : IconButton(
+                  icon: Icon(playing ? Icons.pause : Icons.play_arrow, color: Colors.white), 
+                  onPressed: () => playing ? handler.pause() : handler.play() // Direct control
+                ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFullScreen(BuildContext context, MusicProvider provider, Song song) {
+  // ⚠️ ADDED: handler, playing, processingState
+  Widget _buildFullScreen(BuildContext context, MusicProvider provider, Song song, AudioHandler handler, bool playing, AudioProcessingState processingState) {
+    final bool isLoading = processingState == AudioProcessingState.loading || 
+                           processingState == AudioProcessingState.buffering;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -132,23 +165,34 @@ class SmartPlayer extends StatelessWidget {
                       Text(song.title, textAlign: TextAlign.center, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
                       Text(song.artist, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16)),
                       SizedBox(height: 10),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Row(
-                          children: [
-                            Text(_formatDuration(provider.position), style: TextStyle(color: Colors.white54, fontSize: 12)),
-                            Expanded(
-                              child: Slider(
-                                value: provider.position.inSeconds.toDouble().clamp(0, provider.duration.inSeconds.toDouble()),
-                                max: provider.duration.inSeconds.toDouble() > 0 ? provider.duration.inSeconds.toDouble() : 1, 
-                                activeColor: Colors.purpleAccent,
-                                inactiveColor: Colors.white10,
-                                onChanged: (val) => provider.seek(Duration(seconds: val.toInt())),
-                              ),
+                      
+                      // ⚠️ REAL-TIME SEEK BAR
+                      StreamBuilder<Duration>(
+                        stream: AudioService.position,
+                        builder: (context, snapshot) {
+                          final position = snapshot.data ?? Duration.zero;
+                          // Use provider duration as fallback or get from stream if available
+                          final duration = provider.duration.inMilliseconds > 0 ? provider.duration : Duration(seconds: 1);
+                          
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              children: [
+                                Text(_formatDuration(position), style: TextStyle(color: Colors.white54, fontSize: 12)),
+                                Expanded(
+                                  child: Slider(
+                                    value: position.inMilliseconds.toDouble().clamp(0, duration.inMilliseconds.toDouble()),
+                                    max: duration.inMilliseconds.toDouble(), 
+                                    activeColor: Colors.purpleAccent,
+                                    inactiveColor: Colors.white10,
+                                    onChanged: (val) => handler.seek(Duration(milliseconds: val.toInt())),
+                                  ),
+                                ),
+                                Text(_formatDuration(duration), style: TextStyle(color: Colors.white54, fontSize: 12)),
+                              ],
                             ),
-                            Text(_formatDuration(provider.duration), style: TextStyle(color: Colors.white54, fontSize: 12)),
-                          ],
-                        ),
+                          );
+                        }
                       ),
                     ],
                   ),
@@ -157,21 +201,21 @@ class SmartPlayer extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IconButton(icon: Icon(Icons.skip_previous_rounded, color: Colors.white, size: 45), onPressed: provider.previous),
+                    IconButton(icon: Icon(Icons.skip_previous_rounded, color: Colors.white, size: 45), onPressed: handler.skipToPrevious),
                     SizedBox(width: 20),
                     Container(
                       decoration: BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.purple.withOpacity(0.4), blurRadius: 15)]),
                       padding: EdgeInsets.all(5),
                       child: IconButton(
                         iconSize: 50, 
-                        icon: provider.isLoadingSong 
+                        icon: isLoading 
                           ? SizedBox(width: 30, height: 30, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                          : Icon(provider.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white),
-                        onPressed: provider.togglePlayPause
+                          : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white),
+                        onPressed: () => playing ? handler.pause() : handler.play()
                       ),
                     ),
                     SizedBox(width: 20),
-                    IconButton(icon: Icon(Icons.skip_next_rounded, color: Colors.white, size: 45), onPressed: provider.next),
+                    IconButton(icon: Icon(Icons.skip_next_rounded, color: Colors.white, size: 45), onPressed: handler.skipToNext),
                   ],
                 ),
                 Spacer(),
