@@ -51,9 +51,8 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // We only use Provider to get the HEADER (The AudioHandler instance)
-    // We do NOT use it for logic anymore.
-    final handler = Provider.of<MusicProvider>(context, listen: false).audioHandler;
+    // Get the MusicProvider instance. We will use this to play songs.
+    final provider = Provider.of<MusicProvider>(context, listen: false);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -95,7 +94,6 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
                     return ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       
-                      // ALBUM ART
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
@@ -113,7 +111,6 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
                         ),
                       ),
                       
-                      // TITLE & ARTIST
                       title: Text(
                         song.title, 
                         maxLines: 1, 
@@ -126,37 +123,23 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
                         style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)
                       ),
                       
-                      // ⚠️ THE FIX: DIRECT INJECTION INTO AUDIO HANDLER
-                      onTap: () async {
-                        if (handler != null) {
-                          // 1. Create the MediaItem locally with the Fix applied
-                          final mediaItem = MediaItem(
-                            // Use song.uri (with fallback) to prevent path issues
-                            id: song.uri ?? "content://media/external/audio/media/${song.id}", 
+                      // *** THE FIX IS HERE ***
+                      onTap: () {
+                        // 1. Create a `Song` object from the `SongModel` that
+                        //    the provider's `play` method expects.
+                        final songToPlay = Song(
+                            id: song.uri!,
                             title: song.title,
-                            artist: song.artist ?? "Unknown Artist",
-                            duration: Duration(milliseconds: song.duration ?? 0),
-                            genre: 'local', // Required for fix
-                            
-                            // *** CRITICAL CHANGE: Adding artworkId ***
-                            // We keep localId too so your PlayerScreen doesn't break
-                            extras: {
-                              'artworkId': song.id, 
-                              'localId': song.id
-                            },
-                          );
+                            artist: song.artist ?? "Unknown",
+                            thumbUrl: "", // Not applicable for local songs
+                            type: 'local',
+                            localId: song.id);
 
-                          // 2. Send directly to Engine (Bypassing Provider Logic)
-                          await handler.playMediaItem(mediaItem);
+                        // 2. Delegate playback to the provider. It will handle all logic.
+                        provider.play(songToPlay);
 
-                          // 3. Open Player UI
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => SmartPlayer(audioHandler: handler),
-                            ),
-                          );
-                        }
+                        // 3. The incorrect `Navigator.push` is removed, which resolves
+                        //    the "No named parameter" build error.
                       },
                     );
                   },
