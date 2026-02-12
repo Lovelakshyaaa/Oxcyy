@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:oxcy/providers/music_provider.dart';
+import 'player_screen.dart'; // ⚠️ Make sure this import is here
 
 class LocalMusicScreen extends StatelessWidget {
   @override
@@ -42,13 +43,12 @@ class LocalMusicScreen extends StatelessWidget {
             else
               Expanded(
                 child: ListView.builder(
-                  padding: EdgeInsets.only(bottom: 100), // Space for MiniPlayer
+                  padding: EdgeInsets.only(bottom: 100), 
                   itemCount: provider.localSongs.length,
                   itemBuilder: (context, index) {
                     final song = provider.localSongs[index];
                     return ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      // ⚠️ THE FIX: Robust Album Art Handling ⚠️
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: SizedBox(
@@ -57,13 +57,12 @@ class LocalMusicScreen extends StatelessWidget {
                           child: QueryArtworkWidget(
                             id: song.localId!,
                             type: ArtworkType.AUDIO,
-                            keepOldArtwork: true, // Prevents flickering
+                            keepOldArtwork: true, 
                             nullArtworkWidget: Container(
                               color: Colors.white10,
                               child: Icon(Icons.music_note, color: Colors.white),
                             ),
                             errorBuilder: (context, exception, stackTrace) {
-                              // Fallback if artwork fails to load
                               return Container(
                                 color: Colors.white10,
                                 child: Icon(Icons.music_note, color: Colors.white),
@@ -83,9 +82,19 @@ class LocalMusicScreen extends StatelessWidget {
                         maxLines: 1, 
                         style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)
                       ),
-                      onTap: () {
-                        // Plays the song (Provider handles logic)
-                        provider.play(song);
+                      onTap: () async {
+                        // 1. Start Playing
+                        await provider.play(song);
+
+                        // 2. ⚠️ THE FIX: Open the Connected Player Screen
+                        if (provider.audioHandler != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => SmartPlayer(audioHandler: provider.audioHandler!),
+                            ),
+                          );
+                        }
                       },
                     );
                   },
