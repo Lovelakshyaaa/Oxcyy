@@ -30,39 +30,33 @@ class Song {
 class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
   
-  // ⚠️ THE FIX: Expose the handler so screens can listen to it directly
+  // The UI will access the real engine through this getter.
   AudioHandler? get audioHandler => _audioHandler; 
 
   final _yt = yt.YoutubeExplode();
   
+  // --- Business Logic State (Fetching and holding song lists) ---
   List<Song> _localSongs = [];
   List<Song> _searchResults = [];
-  List<Song> _queue = [];
-  int _currentIndex = -1;
-
   bool _isFetchingLocal = false;
-  bool _isMiniPlayerVisible = false;
+
+  // --- UI-Specific State (Only for controlling UI elements) ---
   bool _isPlayerExpanded = false;
-  bool _isPlaying = false;
-  bool _isInitialized = false;
-  bool _isBuffering = false; 
-
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-
+  
+  // Getters for the business and UI state.
   List<Song> get localSongs => _localSongs;
   List<Song> get searchResults => _searchResults;
-  Song? get currentSong => (_currentIndex >= 0 && _currentIndex < _queue.length) ? _queue[_currentIndex] : null;
-  bool get isMiniPlayerVisible => _isMiniPlayerVisible;
   bool get isPlayerExpanded => _isPlayerExpanded;
   bool get isFetchingLocal => _isFetchingLocal;
-  bool get isLoadingSong => _isBuffering; 
-  bool get isPlaying => _isPlaying;
-  bool get isInitialized => _isInitialized;
-  Duration get position => _position;
-  Duration get duration => _duration;
   
-  Stream<PlaybackState>? get playbackState => _audioHandler?.playbackState;
+  // --- GHOST STATE HAS BEEN EXORCISED ---
+  // No more _queue, _currentIndex, _isPlaying, _isBuffering, _position, or _duration.
+  // The UI will now get this information directly from the `audioHandler` streams.
+
+  // This getter determines visibility based on the REAL source of truth.
+  bool get isMiniPlayerVisible => _audioHandler?.mediaItem.value != null;
+
+  bool _isInitialized = false;
 
   Future<void> init() async {
     if (_isInitialized) return;
@@ -73,23 +67,9 @@ class MusicProvider with ChangeNotifier {
 
       _audioHandler = await initAudioService();
       
-      _audioHandler!.playbackState.listen((state) {
-        _isPlaying = state.playing;
-        _position = state.position;
-        _isBuffering = state.processingState == AudioProcessingState.loading || 
-                       state.processingState == AudioProcessingState.buffering;
-        notifyListeners();
-      });
-      
-      _audioHandler!.mediaItem.listen((item) {
-        if (item?.duration != null) {
-          _duration = item!.duration!;
-          notifyListeners();
-        }
-      });
-      
-      AudioService.position.listen((pos) {
-        _position = pos;
+      // We listen to the mediaItem stream only to know when to update the UI's
+      // visibility, not to manage state.
+      _audioHandler!.mediaItem.listen((_) {
         notifyListeners();
       });
 
@@ -97,7 +77,7 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
       await fetchLocalSongs(); 
     } catch (e) {
-      print("Init Error: $e");
+      print("Provider Init Error: $e");
     }
   }
 
@@ -114,117 +94,105 @@ class MusicProvider with ChangeNotifier {
           ignoreCase: true,
         );
         _localSongs = songs.where((item) => (item.isMusic == true) && (item.duration ?? 0) > 10000).map((item) {
-
-          final contentUri = "content://media/external/audio/media/${item.id}";
+          // The ID for local songs MUST be the content URI for the handler to work.
           return Song(
-            id: contentUri, 
+            id: item.uri!, 
             title: item.title,
             artist: item.artist ?? "Unknown",
-            thumbUrl: "",
+            thumbUrl: "", // Not applicable for local
             type: 'local',
             localId: item.id,
           );
         }).toList();
       }
-    } catch (e) { print("Local Error: $e"); }
+    } catch (e) { print("Local Fetch Error: $e"); }
     _isFetchingLocal = false;
     notifyListeners();
   }
 
   Future<void> search(String query) async {
+    if (query.isEmpty) return;
     _searchResults = [];
     notifyListeners();
     try {
       var results = await _yt.search.getVideos(query);
       _searchResults = results.map((video) => Song(
-        id: video.id.value,
+        id: video.id.value, // For YouTube, the ID is the video ID.
         title: video.title,
         artist: video.author,
         thumbUrl: video.thumbnails.highResUrl,
-        type: 'video',
+        type: 'youtube', // Use 'youtube' as genre
       )).toList();
       notifyListeners();
     } catch (e) { print("Search Error: $e"); }
   }
 
+  // *** THE CRITICAL FIX: This method now correctly controls the AudioHandler ***
   Future<void> play(Song song) async {
-    if (song.type == 'local') {
-      _queue = _localSongs;
-    } else {
-      _queue = [song];
-    }
-    _currentIndex = _queue.indexOf(song);
-    if (_currentIndex == -1) _currentIndex = 0;
-
-    _isMiniPlayerVisible = true;
-    _isPlayerExpanded = true;
-    _isBuffering = true;
-    notifyListeners();
-
     if (_audioHandler == null) await init();
-    if (_audioHandler == null) return;
+    // Ensure the handler is the one with queue capabilities
+    final handler = _audioHandler as MyAudioHandler;
 
-    try {
-      String playUrl = "";
-      if (song.type == 'local') {
-        playUrl = song.id; 
-      } else {
-        playUrl = await _getStreamUrl(song.id); 
-      }
+    List<Song> songQueue;
+    // When a local song is played, the queue is the entire list of local songs.
+    if (song.type == 'local') {
+      songQueue = _localSongs;
+    } else {
+      // When a searched song is played, the queue is just that single song.
+      songQueue = [song]; 
+    }
 
-      if (playUrl.isEmpty) throw Exception("No URL found");
+    final initialIndex = songQueue.indexWhere((s) => s.id == song.id);
+    if (initialIndex < 0) return;
 
-      final mediaItem = MediaItem(
-        id: playUrl,
-        album: song.type == 'local' ? "Local Music" : "YouTube",
-        title: song.title,
-        artist: song.artist,
-        artUri: song.type == 'video' ? Uri.parse(song.thumbUrl) : null,
-        extras: {'localId': song.localId},
+    // Convert our business `Song` objects into `MediaItem` objects for the engine.
+    final mediaItems = songQueue.map((s) {
+      return MediaItem(
+        id: s.id, // For local files, this is the content URI. For YouTube, it's the video ID.
+        album: s.type == 'local' ? "Local Music" : "YouTube",
+        title: s.title,
+        artist: s.artist,
+        artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
+        genre: s.type, // The handler uses this to know how to process the ID.
+        extras: {'artworkId': s.localId}, // Pass the artwork ID for the UI fix.
       );
+    }).toList();
 
-      await (_audioHandler as MyAudioHandler).playMediaItem(mediaItem);
-
-    } catch (e) {
-      print("Play Error: $e");
-      _isBuffering = false;
-      notifyListeners();
-    }
+    // Delegate the entire playback operation to the AudioHandler.
+    await handler.updateQueue(mediaItems);
+    await handler.skipToQueueItem(initialIndex);
+    
+    // Now, we can manage the UI state. This will make the player appear.
+    _isPlayerExpanded = true;
+    notifyListeners();
   }
 
-  Future<String> _getStreamUrl(String id) async {
-    try {
-      var manifest = await _yt.videos.streamsClient.getManifest(id);
-      return manifest.audioOnly.withHighestBitrate().url.toString();
-    } catch (e) { 
-      try {
-        var res = await http.get(Uri.parse('https://yt.lemnoslife.com/videos?part=streaming&id=$id'));
-        var data = jsonDecode(res.body);
-        return data['items'][0]['streamingData']['adaptiveFormats']
-            .firstWhere((f) => f['mimeType'].contains('audio/mp4'))['url'];
-      } catch (e) { return ""; }
-    }
-    return "";
-  }
+  // This is no longer needed here as the handler resolves the URL.
+  // Future<String> _getStreamUrl(String id) async { ... }
 
+  // --- All controls are now simple delegations to the real engine ---
   void togglePlayPause() {
-    if (_audioHandler == null) return;
-    if (_isPlaying) _audioHandler!.pause();
-    else _audioHandler!.play();
+    if (_audioHandler?.playbackState.value.playing == true) {
+      _audioHandler!.pause();
+    } else {
+      _audioHandler!.play();
+    }
   }
   
-  void next() {
-    if (_queue.isEmpty) return;
-    if (_currentIndex < _queue.length - 1) play(_queue[_currentIndex + 1]);
-    else play(_queue[0]);
-  }
+  void next() => (_audioHandler as QueueHandler?)?.skipToNext();
   
-  void previous() {
-    if (_queue.isEmpty) return;
-    if (_currentIndex > 0) play(_queue[_currentIndex - 1]);
-  }
+  void previous() => (_audioHandler as QueueHandler?)?.skipToPrevious();
 
   void seek(Duration pos) => _audioHandler?.seek(pos);
-  void togglePlayerView() { _isPlayerExpanded = !_isPlayerExpanded; notifyListeners(); }
-  void collapsePlayer() { _isPlayerExpanded = false; notifyListeners(); }
+  
+  // These UI state methods remain as they only affect the UI.
+  void togglePlayerView() { 
+    _isPlayerExpanded = !_isPlayerExpanded; 
+    notifyListeners(); 
+  }
+
+  void collapsePlayer() { 
+    _isPlayerExpanded = false; 
+    notifyListeners(); 
+  }
 }
