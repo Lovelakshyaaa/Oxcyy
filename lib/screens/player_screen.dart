@@ -82,8 +82,8 @@ class SmartPlayer extends StatelessWidget {
         keepOldArtwork: false,
         quality: 100,
         artworkQuality: FilterQuality.high,
-        artworkHeight: size * 2.0,
-        artworkWidth: size * 2.0,
+        artworkHeight: size * 1.0,
+        artworkWidth: size * 1.0,
         nullArtworkWidget: Container(
           color: Colors.grey[900],
           child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
@@ -380,7 +380,7 @@ class __HighResArtworkState extends State<_HighResArtwork> {
       final artwork = await _audioQuery.queryArtwork(
         artworkId,
         ArtworkType.AUDIO,
-        size: 1024,   // request large size
+        size: -1,   // request large size
         quality: 100,
       );
       if (artwork != null) {
