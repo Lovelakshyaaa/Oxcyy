@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,46 +7,63 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:rxdart/rxdart.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/services/audio_handler.dart';
 
-// Main SmartPlayer widget: Handles the overall structure and animations.
-class SmartPlayer extends StatelessWidget {
+class SmartPlayer extends StatefulWidget {
   const SmartPlayer({Key? key}) : super(key: key);
+
+  @override
+  State<SmartPlayer> createState() => _SmartPlayerState();
+}
+
+class _SmartPlayerState extends State<SmartPlayer> {
+  MediaItem? _currentMediaItem;
+  StreamSubscription? _mediaItemSubscription;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final audioHandler = context.read<MusicProvider>().audioHandler;
+    if (audioHandler != null && _mediaItemSubscription == null) {
+      // Listen to the media item stream and update the state, preventing the UI from disappearing.
+      _mediaItemSubscription = audioHandler.mediaItem.distinct().listen((mediaItem) {
+        if (mediaItem != null) {
+          setState(() {
+            _currentMediaItem = mediaItem;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _mediaItemSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final audioHandler = context.read<MusicProvider>().audioHandler;
-    if (audioHandler == null) return const SizedBox.shrink();
+    if (audioHandler == null || _currentMediaItem == null) {
+      return const SizedBox.shrink();
+    }
 
-    return StreamBuilder<MediaItem?>(
-      stream: audioHandler.mediaItem.distinct(),
-      builder: (context, mediaItemSnapshot) {
-        final mediaItem = mediaItemSnapshot.data;
-        if (mediaItem == null) return const SizedBox.shrink();
-
-        return Selector<MusicProvider, bool>(
-          selector: (_, provider) => provider.isPlayerExpanded,
-          builder: (context, isPlayerExpanded, _) {
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              height: isPlayerExpanded ? MediaQuery.of(context).size.height : 70.0,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A2E),
-                borderRadius: isPlayerExpanded
-                    ? BorderRadius.zero
-                    : const BorderRadius.vertical(top: Radius.circular(16)),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black45, blurRadius: 10)
-                ],
-              ),
-              child: isPlayerExpanded
-                  ? FullPlayerView(mediaItem: mediaItem, audioHandler: audioHandler)
-                  : MiniPlayerView(mediaItem: mediaItem, audioHandler: audioHandler),
-            );
-          },
+    return Selector<MusicProvider, bool>(
+      selector: (_, provider) => provider.isPlayerExpanded,
+      builder: (context, isPlayerExpanded, _) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          height: isPlayerExpanded ? MediaQuery.of(context).size.height : 70.0,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A2E),
+            borderRadius: isPlayerExpanded ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(16)),
+            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
+          ),
+          child: isPlayerExpanded
+              ? FullPlayerView(mediaItem: _currentMediaItem!, audioHandler: audioHandler)
+              : MiniPlayerView(mediaItem: _currentMediaItem!, audioHandler: audioHandler),
         );
       },
     );
@@ -71,13 +88,9 @@ class MiniPlayerView extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-               child: AnimatedSwitcher(
+              child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
-                child: _Artwork(
-                  key: ValueKey(mediaItem.id),
-                  mediaItem: mediaItem,
-                  size: 45
-                ),
+                child: _Artwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: 45),
               ),
             ),
             const SizedBox(width: 12),
@@ -114,41 +127,32 @@ class FullPlayerView extends StatelessWidget {
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 750),
             transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-            child: _Artwork(
-              key: ValueKey(mediaItem.id),
-              mediaItem: mediaItem,
-              size: double.infinity,
-              highRes: true,
-            ),
+            child: _Artwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: double.infinity, highRes: true),
           ),
         ),
         Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
-        
         SafeArea(
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: () => context.read<MusicProvider>().collapsePlayer()),
-              ),
-              const Spacer(),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 750),
-                 transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                child: _HighResArtwork(
-                  key: ValueKey(mediaItem.id),
-                  mediaItem: mediaItem,
-                  size: 300,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: () => context.read<MusicProvider>().collapsePlayer()),
                 ),
-              ),
-              const SizedBox(height: 40),
-              _SongInfoCard(mediaItem: mediaItem, audioHandler: audioHandler),
-              const SizedBox(height: 20),
-              
-              _FullPlayerControls(audioHandler: audioHandler),
-              
-              const Spacer(),
-            ],
+                const Spacer(),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 750),
+                  transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                  child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: 300),
+                ),
+                const SizedBox(height: 40),
+                _SongInfoCard(mediaItem: mediaItem, audioHandler: audioHandler),
+                const SizedBox(height: 20),
+                _FullPlayerControls(audioHandler: audioHandler),
+                const Spacer(),
+              ],
+            ),
           ),
         ),
       ],
@@ -165,47 +169,28 @@ class _Artwork extends StatelessWidget {
 
   const _Artwork({Key? key, required this.mediaItem, required this.size, this.highRes = false}) : super(key: key);
 
- @override
+  @override
   Widget build(BuildContext context) {
-    final isLocal = mediaItem.genre == 'local';
-    if (isLocal) {
-      final artworkId = mediaItem.extras?['artworkId'] as int?;
-      if (artworkId == null) {
-        return Container(
-          color: Colors.grey[900],
-          child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
-        );
-      }
-      return QueryArtworkWidget(
-        id: artworkId,
-        type: ArtworkType.AUDIO,
-        keepOldArtwork: true,
-        quality: 100,
-        artworkQuality: FilterQuality.high,
-        size: highRes ? 1000 : 200, 
-        artworkBorder: BorderRadius.zero,
-        nullArtworkWidget: Container(
-          color: Colors.grey[900],
-          child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
-        ),
-      );
-    } else {
+    if (mediaItem.artUri != null) {
       return CachedNetworkImage(
-        key: ValueKey(mediaItem.artUri),
         imageUrl: mediaItem.artUri.toString(),
         width: size,
         height: size,
         fit: BoxFit.cover,
-        memCacheWidth: highRes ? 1000 : 200,
-        memCacheHeight: highRes ? 1000 : 200,
         fadeInDuration: const Duration(milliseconds: 300),
-        errorWidget: (_, __, ___) => Container(
-          color: Colors.grey[900],
-          child: const Icon(Icons.music_note),
-        ),
+        errorWidget: (_, __, ___) => _defaultArtwork(),
       );
     }
+    return QueryArtworkWidget(
+      id: mediaItem.extras!['artworkId'] as int,
+      type: ArtworkType.AUDIO,
+      keepOldArtwork: true,
+      artworkQuality: FilterQuality.high,
+      nullArtworkWidget: _defaultArtwork(),
+    );
   }
+
+  Widget _defaultArtwork() => Container(color: Colors.grey[900], child: const Icon(Icons.music_note, color: Colors.white));
 }
 
 class _HighResArtwork extends StatelessWidget {
@@ -220,9 +205,7 @@ class _HighResArtwork extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -240,7 +223,7 @@ class _SongInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassmorphicContainer(
-      width: MediaQuery.of(context).size.width * 0.9,
+      width: double.infinity,
       height: 180,
       borderRadius: 20,
       blur: 15,
@@ -253,11 +236,19 @@ class _SongInfoCard extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(mediaItem.title, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+              child: Text(mediaItem.title, key: ValueKey(mediaItem.title), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            ),
           ),
           Padding(
-             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(mediaItem.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16)),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+              child: Text(mediaItem.artist ?? '', key: ValueKey(mediaItem.artist), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16)),
+            ),
           ),
           const SizedBox(height: 10),
           _PositionSlider(mediaItem: mediaItem, handler: audioHandler),
@@ -299,6 +290,8 @@ class _FullPlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final musicProvider = context.watch<MusicProvider>();
+
     return StreamBuilder<PlaybackState>(
       stream: audioHandler.playbackState,
       builder: (context, snapshot) {
@@ -306,14 +299,19 @@ class _FullPlayerControls extends StatelessWidget {
         final playing = state?.playing ?? false;
         final processingState = state?.processingState ?? AudioProcessingState.idle;
         final isLoading = processingState == AudioProcessingState.loading || processingState == AudioProcessingState.buffering;
+        final repeatMode = state?.repeatMode ?? AudioServiceRepeatMode.none;
+        final isShuffleEnabled = musicProvider.isShuffleEnabled;
 
         return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            IconButton(
+              icon: Icon(Icons.shuffle, color: isShuffleEnabled ? Colors.purpleAccent : Colors.white),
+              onPressed: musicProvider.toggleShuffle,
+            ),
             IconButton(icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 45), onPressed: audioHandler.skipToPrevious),
-            const SizedBox(width: 20),
             Container(
-              width: 70, // Button container size
+              width: 70, 
               height: 70,
               decoration: BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.purple.withOpacity(0.4), blurRadius: 15)]),
               child: IconButton(
@@ -321,24 +319,20 @@ class _FullPlayerControls extends StatelessWidget {
                 icon: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
                   child: isLoading
-                      ? Container(
-                          key: const ValueKey('loader'),
-                          width: 50,
-                          height: 50,
-                          padding: const EdgeInsets.all(10.0),
-                          child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-                        )
-                      : Icon(
-                          playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          key: const ValueKey('play_pause'),
-                          color: Colors.white,
-                        ),
+                      ? Container(key: const ValueKey('loader'), width: 50, height: 50, padding: const EdgeInsets.all(10.0), child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                      : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, key: const ValueKey('play_pause'), color: Colors.white),
                 ),
                 onPressed: () => playing ? audioHandler.pause() : audioHandler.play(),
               ),
             ),
-            const SizedBox(width: 20),
             IconButton(icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 45), onPressed: audioHandler.skipToNext),
+            IconButton(
+              icon: Icon(
+                repeatMode == AudioServiceRepeatMode.one ? Icons.repeat_one : Icons.repeat,
+                color: repeatMode != AudioServiceRepeatMode.none ? Colors.purpleAccent : Colors.white,
+              ),
+              onPressed: musicProvider.cycleRepeatMode,
+            ),
           ],
         );
       },

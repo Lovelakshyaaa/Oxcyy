@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:glassmorphism/glassmorphism.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/album_songs_screen.dart';
 
@@ -61,49 +62,57 @@ class LocalMusicScreen extends StatelessWidget {
                               MaterialPageRoute(builder: (_) => AlbumSongsScreen(album: album)),
                             );
                           },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12.0),
-                                child: QueryArtworkWidget(
-                                  id: album.id,
-                                  type: ArtworkType.ALBUM,
-                                  artworkQuality: FilterQuality.high,
-                                  artworkHeight: 200,
-                                  artworkWidth: 200,
-                                  nullArtworkWidget: Container(
-                                    height: 180,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12.0),
-                                    ),
-                                    child: const Center(
-                                      child: Icon(Icons.album, color: Colors.white54, size: 50),
+                          child: GlassmorphicContainer(
+                            width: double.infinity,
+                            height: double.infinity,
+                            borderRadius: 20,
+                            blur: 15,
+                            border: 1,
+                            linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
+                            borderGradient: LinearGradient(colors: [Colors.white.withOpacity(0.2), Colors.white.withOpacity(0.1)]),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20.0)),
+                                    child: QueryArtworkWidget(
+                                      id: album.id,
+                                      type: ArtworkType.ALBUM,
+                                      artworkQuality: FilterQuality.high,
+                                      size: 500, // Higher resolution artwork
+                                      artworkFit: BoxFit.cover,
+                                      nullArtworkWidget: Container(
+                                        color: Colors.grey.withOpacity(0.1),
+                                        child: const Center(
+                                          child: Icon(Icons.album, color: Colors.white54, size: 50),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4.0),
-                                child: Text(
-                                  album.album,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                                Padding(
+                                  padding: const EdgeInsets.all(10.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                       Text(
+                                        album.album,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                                      ),
+                                      Text(
+                                        album.artist ?? "Unknown Artist",
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4.0),
-                                child: Text(
-                                  album.artist ?? "Unknown Artist",
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         );
                       },

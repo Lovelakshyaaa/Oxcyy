@@ -67,6 +67,8 @@ class AlbumSongsScreen extends StatelessWidget {
                   onTap: () {
                     // When a song is tapped, play it with the context of the current album's song list.
                     musicProvider.play(song, newQueue: songsInAlbum);
+                    // After playing, pop the screen to reveal the main player UI.
+                    Navigator.pop(context);
                   },
                 );
               },
