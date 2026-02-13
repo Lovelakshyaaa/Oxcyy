@@ -6,6 +6,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:rxdart/rxdart.dart'; // for throttleTime
 import 'package:oxcy/providers/music_provider.dart';
 
 class SmartPlayer extends StatelessWidget {
@@ -28,7 +29,7 @@ class SmartPlayer extends StatelessWidget {
         final double height = uiProvider.isPlayerExpanded ? screenHeight : 70.0;
 
         return AnimatedContainer(
-          key: ValueKey(mediaItem.id),
+          key: ValueKey(mediaItem.id), // 🔥 forces rebuild only when song changes
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
           height: height,
@@ -64,7 +65,6 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // 🔥 FIXED: artworkHeight/Width now receive double (size), not int
   Widget _buildArtwork(MediaItem mediaItem, double size, {bool highRes = false}) {
     final isLocal = mediaItem.genre == 'local';
     if (isLocal) {
@@ -81,8 +81,8 @@ class SmartPlayer extends StatelessWidget {
         keepOldArtwork: false,
         quality: 100,
         artworkQuality: FilterQuality.high,
-        artworkHeight: size * 1.5,   // ✅ now double
-        artworkWidth: size * 1.5,    // ✅ now double
+        artworkHeight: size * 2.0,
+        artworkWidth: size * 2.0,
         nullArtworkWidget: Container(
           color: Colors.grey[900],
           child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
@@ -90,11 +90,13 @@ class SmartPlayer extends StatelessWidget {
       );
     } else {
       return CachedNetworkImage(
-        key: ValueKey(mediaItem.artUri),
+        key: ValueKey(mediaItem.artUri), // 🔥 refresh cache when URL changes
         imageUrl: mediaItem.artUri.toString(),
         width: size,
         height: size,
         fit: BoxFit.cover,
+        memCacheWidth: (size * 2).toInt(),
+        memCacheHeight: (size * 2).toInt(),
         errorWidget: (_, __, ___) => Container(
           color: Colors.grey[900],
           child: const Icon(Icons.music_note),
@@ -206,6 +208,7 @@ class SmartPlayer extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                // Album artwork
                 Container(
                   width: 300,
                   height: 300,
@@ -224,6 +227,7 @@ class SmartPlayer extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 40),
+                // Glassmorphic container with title, artist, and slider
                 GlassmorphicContainer(
                   width: MediaQuery.of(context).size.width * 0.9,
                   height: 180,
@@ -262,50 +266,13 @@ class SmartPlayer extends StatelessWidget {
                             color: Colors.white70, fontSize: 16),
                       ),
                       const SizedBox(height: 10),
-                      StreamBuilder<Duration>(
-                        stream: AudioService.position,
-                        builder: (context, snapshot) {
-                          final position = snapshot.data ?? Duration.zero;
-                          final duration = mediaItem.duration ?? Duration.zero;
-                          return Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              children: [
-                                Text(
-                                  _formatDuration(position),
-                                  style: const TextStyle(
-                                      color: Colors.white54, fontSize: 12),
-                                ),
-                                Expanded(
-                                  child: Slider(
-                                    value: position.inMilliseconds
-                                        .toDouble()
-                                        .clamp(0.0,
-                                            duration.inMilliseconds.toDouble()),
-                                    max: duration.inMilliseconds > 0
-                                        ? duration.inMilliseconds.toDouble()
-                                        : 1.0,
-                                    activeColor: Colors.purpleAccent,
-                                    inactiveColor: Colors.white10,
-                                    onChanged: (val) => handler.seek(
-                                        Duration(milliseconds: val.toInt())),
-                                  ),
-                                ),
-                                Text(
-                                  _formatDuration(duration),
-                                  style: const TextStyle(
-                                      color: Colors.white54, fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                      // 🔥 Optimized slider widget (extracted to reduce rebuilds)
+                      _PositionSlider(mediaItem: mediaItem, handler: handler),
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
+                // Playback controls
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -354,6 +321,88 @@ class SmartPlayer extends StatelessWidget {
                 const Spacer(),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(Duration d) {
+    final min = d.inMinutes;
+    final sec = d.inSeconds % 60;
+    return '$min:${sec.toString().padLeft(2, '0')}';
+  }
+}
+
+// 🔥 New widget that isolates the slider and its logic
+class _PositionSlider extends StatefulWidget {
+  const _PositionSlider({required this.mediaItem, required this.handler});
+
+  final MediaItem mediaItem;
+ final AudioHandler handler;
+
+  @override
+  __PositionSliderState createState() => __PositionSliderState();
+}
+
+class __PositionSliderState extends State<_PositionSlider> {
+  double? _dragValue; // value during user drag
+
+  // Throttled position stream (updates every 500ms)
+  late final Stream<Duration> _throttledPositionStream =
+      AudioService.position.throttleTime(const Duration(milliseconds: 500));
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = widget.mediaItem.duration ?? Duration.zero;
+    final bool durationKnown = duration.inMilliseconds > 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          // Current position
+          StreamBuilder<Duration>(
+            stream: _throttledPositionStream,
+            builder: (context, snapshot) {
+              final position = _dragValue != null
+                  ? Duration(milliseconds: _dragValue!.toInt())
+                  : (snapshot.data ?? Duration.zero);
+              return Text(
+                _formatDuration(position),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              );
+            },
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: SliderComponentShape.noOverlay,
+              ),
+              child: Slider(
+                value: _dragValue ?? 0,
+                min: 0,
+                max: durationKnown ? duration.inMilliseconds.toDouble() : 1,
+                activeColor: Colors.purpleAccent,
+                inactiveColor: Colors.white10,
+                onChanged: durationKnown
+                    ? (value) {
+                        setState(() => _dragValue = value);
+                      }
+                    : null,
+                onChangeEnd: (value) {
+                  setState(() => _dragValue = null);
+                  widget.handler.seek(Duration(milliseconds: value.toInt()));
+                },
+              ),
+            ),
+          ),
+          // Total duration
+          Text(
+            _formatDuration(duration),
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
         ],
       ),
