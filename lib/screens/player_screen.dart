@@ -6,31 +6,25 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:oxcy/providers/music_provider.dart'; // We only use this for UI state, not song state.
+import 'package:oxcy/providers/music_provider.dart';
 
 class SmartPlayer extends StatelessWidget {
   const SmartPlayer({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // Get the provider for UI state (expanded/collapsed).
     final uiProvider = Provider.of<MusicProvider>(context);
-    // Get the real audio engine.
     final audioHandler = uiProvider.audioHandler;
 
     if (audioHandler == null) return const SizedBox.shrink();
 
-    // The UI now listens to the REAL engine's state.
     return StreamBuilder<MediaItem?>(
       stream: audioHandler.mediaItem,
       builder: (context, mediaItemSnapshot) {
         final mediaItem = mediaItemSnapshot.data;
-
-        // If there's no song, the player is not visible.
         if (mediaItem == null) return const SizedBox.shrink();
 
         final double screenHeight = MediaQuery.of(context).size.height;
-        // The player's height is now controlled by the uiProvider.
         final double height = uiProvider.isPlayerExpanded ? screenHeight : 70.0;
 
         return AnimatedContainer(
@@ -39,7 +33,9 @@ class SmartPlayer extends StatelessWidget {
           height: height,
           decoration: BoxDecoration(
             color: const Color(0xFF1A1A2E),
-            borderRadius: uiProvider.isPlayerExpanded ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: uiProvider.isPlayerExpanded
+                ? BorderRadius.zero
+                : const BorderRadius.vertical(top: Radius.circular(16)),
             boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
           ),
           child: StreamBuilder<PlaybackState>(
@@ -47,14 +43,17 @@ class SmartPlayer extends StatelessWidget {
             builder: (context, playbackStateSnapshot) {
               final state = playbackStateSnapshot.data;
               final playing = state?.playing ?? false;
-              final processingState = state?.processingState ?? AudioProcessingState.idle;
+              final processingState =
+                  state?.processingState ?? AudioProcessingState.idle;
 
               return Stack(
                 children: [
                   if (uiProvider.isPlayerExpanded)
-                    _buildFullScreen(context, uiProvider, audioHandler, mediaItem, playing, processingState)
+                    _buildFullScreen(context, uiProvider, audioHandler,
+                        mediaItem, playing, processingState)
                   else
-                    _buildMiniPlayer(context, uiProvider, audioHandler, mediaItem, playing, processingState),
+                    _buildMiniPlayer(context, uiProvider, audioHandler,
+                        mediaItem, playing, processingState),
                 ],
               );
             },
@@ -64,12 +63,16 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
+  // 🔥 IMPROVED: Request high-res artwork by setting width/height
   Widget _buildArtwork(MediaItem mediaItem, double size, {bool highRes = false}) {
     final isLocal = mediaItem.genre == 'local';
     if (isLocal) {
       final artworkId = mediaItem.extras?['artworkId'] as int?;
       if (artworkId == null) {
-        return Container(color: Colors.grey[900], child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5));
+        return Container(
+          color: Colors.grey[900],
+          child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
+        );
       }
       return QueryArtworkWidget(
         id: artworkId,
@@ -77,7 +80,12 @@ class SmartPlayer extends StatelessWidget {
         keepOldArtwork: true,
         quality: 100,
         artworkQuality: FilterQuality.high,
-        nullArtworkWidget: Container(color: Colors.grey[900], child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5)),
+        artworkHeight: size.toInt(),   // 🔥 NEW: request exact size
+        artworkWidth: size.toInt(),    // 🔥 NEW: request exact size
+        nullArtworkWidget: Container(
+          color: Colors.grey[900],
+          child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
+        ),
       );
     } else {
       return CachedNetworkImage(
@@ -85,13 +93,24 @@ class SmartPlayer extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorWidget: (_, __, ___) => Container(color: Colors.grey[900], child: const Icon(Icons.music_note)),
+        errorWidget: (_, __, ___) => Container(
+          color: Colors.grey[900],
+          child: const Icon(Icons.music_note),
+        ),
       );
     }
   }
 
-  Widget _buildMiniPlayer(BuildContext context, MusicProvider uiProvider, AudioHandler handler, MediaItem mediaItem, bool playing, AudioProcessingState processingState) {
-    final bool isLoading = processingState == AudioProcessingState.loading || processingState == AudioProcessingState.buffering;
+  Widget _buildMiniPlayer(
+    BuildContext context,
+    MusicProvider uiProvider,
+    AudioHandler handler,
+    MediaItem mediaItem,
+    bool playing,
+    AudioProcessingState processingState,
+  ) {
+    final bool isLoading = processingState == AudioProcessingState.loading ||
+        processingState == AudioProcessingState.buffering;
 
     return GestureDetector(
       onTap: uiProvider.togglePlayerView,
@@ -100,24 +119,46 @@ class SmartPlayer extends StatelessWidget {
         color: Colors.transparent,
         child: Row(
           children: [
-            ClipRRect(borderRadius: BorderRadius.circular(8), child: _buildArtwork(mediaItem, 45)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: _buildArtwork(mediaItem, 45),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(mediaItem.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text(mediaItem.artist ?? '', maxLines: 1, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
+                  Text(
+                    mediaItem.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                        color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    mediaItem.artist ?? '',
+                    maxLines: 1,
+                    style: GoogleFonts.poppins(
+                        color: Colors.white70, fontSize: 12),
+                  ),
                 ],
               ),
             ),
             if (isLoading)
-              const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
             else
               IconButton(
-                icon: Icon(playing ? Icons.pause : Icons.play_arrow, color: Colors.white),
-                onPressed: () => playing ? handler.pause() : handler.play(),
+                icon: Icon(
+                    playing ? Icons.pause : Icons.play_arrow,
+                    color: Colors.white),
+                onPressed: () =>
+                    playing ? handler.pause() : handler.play(),
               ),
           ],
         ),
@@ -125,9 +166,16 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // ==================== FIXED: Nested Scaffold removed ====================
-  Widget _buildFullScreen(BuildContext context, MusicProvider uiProvider, AudioHandler handler, MediaItem mediaItem, bool playing, AudioProcessingState processingState) {
-    final bool isLoading = processingState == AudioProcessingState.loading || processingState == AudioProcessingState.buffering;
+  Widget _buildFullScreen(
+    BuildContext context,
+    MusicProvider uiProvider,
+    AudioHandler handler,
+    MediaItem mediaItem,
+    bool playing,
+    AudioProcessingState processingState,
+  ) {
+    final bool isLoading = processingState == AudioProcessingState.loading ||
+        processingState == AudioProcessingState.buffering;
     final queueHandler = handler as QueueHandler;
 
     return Container(
@@ -135,25 +183,23 @@ class SmartPlayer extends StatelessWidget {
       height: double.infinity,
       child: Stack(
         children: [
-          // Background artwork
           Positioned.fill(
             child: _buildArtwork(mediaItem, double.infinity, highRes: true),
           ),
-          // Blur overlay
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
               child: Container(color: Colors.black.withOpacity(0.6)),
             ),
           ),
-          // Main content (SafeArea + Column)
           SafeArea(
             child: Column(
               children: [
                 Align(
                   alignment: Alignment.centerLeft,
                   child: IconButton(
-                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30),
+                    icon: const Icon(Icons.keyboard_arrow_down,
+                        color: Colors.white, size: 30),
                     onPressed: uiProvider.collapsePlayer,
                   ),
                 ),
@@ -164,7 +210,10 @@ class SmartPlayer extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))
+                      BoxShadow(
+                          color: Colors.black54,
+                          blurRadius: 30,
+                          offset: Offset(0, 10))
                     ],
                   ),
                   child: ClipRRect(
@@ -215,14 +264,17 @@ class SmartPlayer extends StatelessWidget {
                         stream: AudioService.position,
                         builder: (context, snapshot) {
                           final position = snapshot.data ?? Duration.zero;
-                          final duration = mediaItem.duration ?? Duration.zero;
+                          final duration = mediaItem.duration ?? Duration.zero; // now has value!
                           return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 20),
                             child: Row(
                               children: [
-                                Text(_formatDuration(position),
-                                    style: const TextStyle(
-                                        color: Colors.white54, fontSize: 12)),
+                                Text(
+                                  _formatDuration(position),
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 12),
+                                ),
                                 Expanded(
                                   child: Slider(
                                     value: position.inMilliseconds
@@ -234,13 +286,15 @@ class SmartPlayer extends StatelessWidget {
                                         : 1.0,
                                     activeColor: Colors.purpleAccent,
                                     inactiveColor: Colors.white10,
-                                    onChanged: (val) => handler
-                                        .seek(Duration(milliseconds: val.toInt())),
+                                    onChanged: (val) => handler.seek(
+                                        Duration(milliseconds: val.toInt())),
                                   ),
                                 ),
-                                Text(_formatDuration(duration),
-                                    style: const TextStyle(
-                                        color: Colors.white54, fontSize: 12)),
+                                Text(
+                                  _formatDuration(duration),
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 12),
+                                ),
                               ],
                             ),
                           );
@@ -307,6 +361,6 @@ class SmartPlayer extends StatelessWidget {
   String _formatDuration(Duration d) {
     final min = d.inMinutes;
     final sec = d.inSeconds % 60;
-    return '${min}:${sec.toString().padLeft(2, '0')}';
+    return '$min:${sec.toString().padLeft(2, '0')}';
   }
 }
