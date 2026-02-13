@@ -16,6 +16,7 @@ class Song {
   final String thumbUrl;
   final String type;
   final int? localId;
+  final Duration? duration; // 🔥 NEW: store duration for slider
 
   Song({
     required this.id,
@@ -24,36 +25,29 @@ class Song {
     required this.thumbUrl,
     required this.type,
     this.localId,
+    this.duration,
   });
 }
 
 class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
-  
-  // The UI will access the real engine through this getter.
-  AudioHandler? get audioHandler => _audioHandler; 
+  AudioHandler? get audioHandler => _audioHandler;
 
   final _yt = yt.YoutubeExplode();
-  
-  // --- Business Logic State (Fetching and holding song lists) ---
+
   List<Song> _localSongs = [];
   List<Song> _searchResults = [];
   bool _isFetchingLocal = false;
-
-  // --- UI-Specific State (Only for controlling UI elements) ---
   bool _isPlayerExpanded = false;
-  
-  // Getters for the business and UI state.
+  bool _isShuffleEnabled = false; // 🔥 NEW: shuffle mode
+  List<Song> _originalQueue = [];   // 🔥 NEW: for shuffle reset
+
   List<Song> get localSongs => _localSongs;
   List<Song> get searchResults => _searchResults;
   bool get isPlayerExpanded => _isPlayerExpanded;
   bool get isFetchingLocal => _isFetchingLocal;
-  
-  // --- GHOST STATE HAS BEEN EXORCISED ---
-  // No more _queue, _currentIndex, _isPlaying, _isBuffering, _position, or _duration.
-  // The UI will now get this information directly from the `audioHandler` streams.
+  bool get isShuffleEnabled => _isShuffleEnabled; // 🔥 NEW getter
 
-  // This getter determines visibility based on the REAL source of truth.
   bool get isMiniPlayerVisible => _audioHandler?.mediaItem.value != null;
 
   bool _isInitialized = false;
@@ -66,16 +60,14 @@ class MusicProvider with ChangeNotifier {
       }
 
       _audioHandler = await initAudioService();
-      
-      // We listen to the mediaItem stream only to know when to update the UI's
-      // visibility, not to manage state.
+
       _audioHandler!.mediaItem.listen((_) {
         notifyListeners();
       });
 
       _isInitialized = true;
       notifyListeners();
-      await fetchLocalSongs(); 
+      await fetchLocalSongs();
     } catch (e) {
       print("Provider Init Error: $e");
     }
@@ -85,7 +77,8 @@ class MusicProvider with ChangeNotifier {
     _isFetchingLocal = true;
     notifyListeners();
     try {
-      if (await Permission.audio.request().isGranted || await Permission.storage.request().isGranted) {
+      if (await Permission.audio.request().isGranted ||
+          await Permission.storage.request().isGranted) {
         final OnAudioQuery audioQuery = OnAudioQuery();
         List<SongModel> songs = await audioQuery.querySongs(
           sortType: SongSortType.DATE_ADDED,
@@ -93,19 +86,24 @@ class MusicProvider with ChangeNotifier {
           uriType: UriType.EXTERNAL,
           ignoreCase: true,
         );
-        _localSongs = songs.where((item) => (item.isMusic == true) && (item.duration ?? 0) > 10000).map((item) {
-          // The ID for local songs MUST be the content URI for the handler to work.
+        _localSongs = songs
+            .where((item) =>
+                (item.isMusic == true) && (item.duration ?? 0) > 10000)
+            .map((item) {
           return Song(
-            id: item.uri!, 
+            id: item.uri!,
             title: item.title,
             artist: item.artist ?? "Unknown",
-            thumbUrl: "", // Not applicable for local
+            thumbUrl: "",
             type: 'local',
             localId: item.id,
+            duration: Duration(milliseconds: item.duration ?? 0), // 🔥 NEW
           );
         }).toList();
       }
-    } catch (e) { print("Local Fetch Error: $e"); }
+    } catch (e) {
+      print("Local Fetch Error: $e");
+    }
     _isFetchingLocal = false;
     notifyListeners();
   }
@@ -116,61 +114,84 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     try {
       var results = await _yt.search.getVideos(query);
-      _searchResults = results.map((video) => Song(
-        id: video.id.value, // For YouTube, the ID is the video ID.
-        title: video.title,
-        artist: video.author,
-        thumbUrl: video.thumbnails.highResUrl,
-        type: 'youtube', // Use 'youtube' as genre
-      )).toList();
+      _searchResults = results.map((video) {
+        return Song(
+          id: video.id.value,
+          title: video.title,
+          artist: video.author,
+          thumbUrl: video.thumbnails.highResUrl,
+          type: 'youtube',
+          duration: video.duration, // 🔥 NEW: YouTube duration is nullable
+        );
+      }).toList();
       notifyListeners();
-    } catch (e) { print("Search Error: $e"); }
+    } catch (e) {
+      print("Search Error: $e");
+    }
   }
 
-  // *** THE CRITICAL FIX: This method now correctly controls the AudioHandler ***
+  // 🔥 NEW: Toggle shuffle mode and update queue
+  Future<void> toggleShuffle() async {
+    if (_audioHandler == null) return;
+    _isShuffleEnabled = !_isShuffleEnabled;
+    if (_isShuffleEnabled) {
+      // Store original order before shuffle
+      _originalQueue = List.from(_localSongs);
+      final shuffled = List<Song>.from(_localSongs)..shuffle();
+      await _updateQueueWithSongs(shuffled);
+    } else {
+      // Restore original order
+      await _updateQueueWithSongs(_originalQueue);
+    }
+    notifyListeners();
+  }
+
+  // 🔥 NEW: Helper to update queue without changing current song
+  Future<void> _updateQueueWithSongs(List<Song> songs) async {
+    final handler = _audioHandler as MyAudioHandler;
+    final mediaItems = songs.map((s) => _songToMediaItem(s)).toList();
+    await handler.updateQueue(mediaItems);
+  }
+
+  MediaItem _songToMediaItem(Song s) {
+    return MediaItem(
+      id: s.id,
+      album: s.type == 'local' ? "Local Music" : "YouTube",
+      title: s.title,
+      artist: s.artist,
+      artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
+      genre: s.type,
+      duration: s.duration, // 🔥 NEW: set duration!
+      extras: {'artworkId': s.localId},
+    );
+  }
+
   Future<void> play(Song song) async {
     if (_audioHandler == null) await init();
-    // Ensure the handler is the one with queue capabilities
     final handler = _audioHandler as MyAudioHandler;
 
     List<Song> songQueue;
-    // When a local song is played, the queue is the entire list of local songs.
     if (song.type == 'local') {
-      songQueue = _localSongs;
+      // Use the currently displayed list (respect shuffle)
+      songQueue = _isShuffleEnabled ? _originalQueue : _localSongs;
     } else {
-      // When a searched song is played, the queue is just that single song.
-      songQueue = [song]; 
+      // YouTube: single song
+      songQueue = [song];
     }
 
     final initialIndex = songQueue.indexWhere((s) => s.id == song.id);
     if (initialIndex < 0) return;
 
-    // Convert our business `Song` objects into `MediaItem` objects for the engine.
-    final mediaItems = songQueue.map((s) {
-      return MediaItem(
-        id: s.id, // For local files, this is the content URI. For YouTube, it's the video ID.
-        album: s.type == 'local' ? "Local Music" : "YouTube",
-        title: s.title,
-        artist: s.artist,
-        artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
-        genre: s.type, // The handler uses this to know how to process the ID.
-        extras: {'artworkId': s.localId}, // Pass the artwork ID for the UI fix.
-      );
-    }).toList();
+    final mediaItems = songQueue.map(_songToMediaItem).toList();
 
-    // Delegate the entire playback operation to the AudioHandler.
     await handler.updateQueue(mediaItems);
     await handler.skipToQueueItem(initialIndex);
-    
-    // Now, we can manage the UI state. This will make the player appear.
+
     _isPlayerExpanded = true;
     notifyListeners();
   }
 
-  // This is no longer needed here as the handler resolves the URL.
-  // Future<String> _getStreamUrl(String id) async { ... }
-
-  // --- All controls are now simple delegations to the real engine ---
+  // Delegated controls
   void togglePlayPause() {
     if (_audioHandler?.playbackState.value.playing == true) {
       _audioHandler!.pause();
@@ -178,21 +199,19 @@ class MusicProvider with ChangeNotifier {
       _audioHandler!.play();
     }
   }
-  
-  void next() => (_audioHandler as QueueHandler?)?.skipToNext();
-  
-  void previous() => (_audioHandler as QueueHandler?)?.skipToPrevious();
 
+  void next() => (_audioHandler as QueueHandler?)?.skipToNext();
+  void previous() => (_audioHandler as QueueHandler?)?.skipToPrevious();
   void seek(Duration pos) => _audioHandler?.seek(pos);
-  
-  // These UI state methods remain as they only affect the UI.
-  void togglePlayerView() { 
-    _isPlayerExpanded = !_isPlayerExpanded; 
-    notifyListeners(); 
+
+  // UI state
+  void togglePlayerView() {
+    _isPlayerExpanded = !_isPlayerExpanded;
+    notifyListeners();
   }
 
-  void collapsePlayer() { 
-    _isPlayerExpanded = false; 
-    notifyListeners(); 
+  void collapsePlayer() {
+    _isPlayerExpanded = false;
+    notifyListeners();
   }
 }
