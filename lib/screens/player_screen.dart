@@ -71,7 +71,14 @@ class MiniPlayerView extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: _Artwork(mediaItem: mediaItem, size: 45),
+               child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                child: _Artwork(
+                  key: ValueKey(mediaItem.id),
+                  mediaItem: mediaItem,
+                  size: 45
+                ),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -84,7 +91,6 @@ class MiniPlayerView extends StatelessWidget {
                 ],
               ),
             ),
-            // This is the only part of the mini-player that needs to rebuild on playback state changes.
             _MiniPlayerControls(audioHandler: audioHandler),
           ],
         ),
@@ -93,7 +99,7 @@ class MiniPlayerView extends StatelessWidget {
   }
 }
 
-// FullPlayerView: The main expanded player UI, now with static and dynamic parts separated.
+// FullPlayerView: The main expanded player UI.
 class FullPlayerView extends StatelessWidget {
   final MediaItem mediaItem;
   final AudioHandler audioHandler;
@@ -104,11 +110,20 @@ class FullPlayerView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Static background
-        Positioned.fill(child: _Artwork(mediaItem: mediaItem, size: double.infinity, highRes: true)),
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 750),
+            transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+            child: _Artwork(
+              key: ValueKey(mediaItem.id),
+              mediaItem: mediaItem,
+              size: double.infinity,
+              highRes: true,
+            ),
+          ),
+        ),
         Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
         
-        // Static UI elements
         SafeArea(
           child: Column(
             children: [
@@ -117,12 +132,19 @@ class FullPlayerView extends StatelessWidget {
                 child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: () => context.read<MusicProvider>().collapsePlayer()),
               ),
               const Spacer(),
-              _HighResArtwork(mediaItem: mediaItem, size: 300),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 750),
+                 transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                child: _HighResArtwork(
+                  key: ValueKey(mediaItem.id),
+                  mediaItem: mediaItem,
+                  size: 300,
+                ),
+              ),
               const SizedBox(height: 40),
               _SongInfoCard(mediaItem: mediaItem, audioHandler: audioHandler),
               const SizedBox(height: 20),
               
-              // Dynamic UI elements (the controls)
               _FullPlayerControls(audioHandler: audioHandler),
               
               const Spacer(),
@@ -134,14 +156,14 @@ class FullPlayerView extends StatelessWidget {
   }
 }
 
-// -- STATIC WIDGETS (Rebuild only when MediaItem changes) --
+// -- WIDGETS --
 
 class _Artwork extends StatelessWidget {
   final MediaItem mediaItem;
   final double size;
   final bool highRes;
 
-  const _Artwork({required this.mediaItem, required this.size, this.highRes = false});
+  const _Artwork({Key? key, required this.mediaItem, required this.size, this.highRes = false}) : super(key: key);
 
  @override
   Widget build(BuildContext context) {
@@ -160,8 +182,8 @@ class _Artwork extends StatelessWidget {
         keepOldArtwork: true,
         quality: 100,
         artworkQuality: FilterQuality.high,
-        artworkHeight: size * (highRes ? 1.0 : 2.0),
-        artworkWidth: size * (highRes ? 1.0 : 2.0),
+        size: highRes ? 1000 : 200, 
+        artworkBorder: BorderRadius.zero,
         nullArtworkWidget: Container(
           color: Colors.grey[900],
           child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
@@ -174,8 +196,9 @@ class _Artwork extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
-        memCacheWidth: (size * 2).toInt(),
-        memCacheHeight: (size * 2).toInt(),
+        memCacheWidth: highRes ? 1000 : 200,
+        memCacheHeight: highRes ? 1000 : 200,
+        fadeInDuration: const Duration(milliseconds: 300),
         errorWidget: (_, __, ___) => Container(
           color: Colors.grey[900],
           child: const Icon(Icons.music_note),
@@ -188,7 +211,7 @@ class _Artwork extends StatelessWidget {
 class _HighResArtwork extends StatelessWidget {
   final MediaItem mediaItem;
   final double size;
-  const _HighResArtwork({required this.mediaItem, required this.size});
+  const _HighResArtwork({Key? key, required this.mediaItem, required this.size}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -244,8 +267,6 @@ class _SongInfoCard extends StatelessWidget {
   }
 }
 
-// -- DYNAMIC WIDGETS (Rebuild only when PlaybackState changes) --
-
 class _MiniPlayerControls extends StatelessWidget {
   final AudioHandler audioHandler;
   const _MiniPlayerControls({required this.audioHandler});
@@ -292,13 +313,27 @@ class _FullPlayerControls extends StatelessWidget {
             IconButton(icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 45), onPressed: audioHandler.skipToPrevious),
             const SizedBox(width: 20),
             Container(
+              width: 70, // Button container size
+              height: 70,
               decoration: BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.purple.withOpacity(0.4), blurRadius: 15)]),
-              padding: const EdgeInsets.all(5),
               child: IconButton(
                 iconSize: 50,
-                icon: isLoading
-                    ? const SizedBox(width: 30, height: 30, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                    : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white),
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: isLoading
+                      ? Container(
+                          key: const ValueKey('loader'),
+                          width: 50,
+                          height: 50,
+                          padding: const EdgeInsets.all(10.0),
+                          child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                        )
+                      : Icon(
+                          playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          key: const ValueKey('play_pause'),
+                          color: Colors.white,
+                        ),
+                ),
                 onPressed: () => playing ? audioHandler.pause() : audioHandler.play(),
               ),
             ),
@@ -310,8 +345,6 @@ class _FullPlayerControls extends StatelessWidget {
     );
   }
 }
-
-// -- SLIDER WIDGET (Already optimized with its own state management) --
 
 class _PositionSlider extends StatefulWidget {
   const _PositionSlider({required this.mediaItem, required this.handler});

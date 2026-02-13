@@ -15,6 +15,7 @@ class Song {
   final String thumbUrl;
   final String type;
   final int? localId;
+  final int? albumId; // For grouping local songs
   final Duration? duration;
 
   Song({
@@ -24,32 +25,32 @@ class Song {
     required this.thumbUrl,
     required this.type,
     this.localId,
+    this.albumId,
     this.duration,
   });
 }
 
 class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
-  AudioHandler? get audioHandler => _audioHandler;
-
-  // ✅ FIX: Use the correct constructor and a valid client factory.
   final _yt = yt.YoutubeExplode(createAndroidClient());
 
   List<Song> _localSongs = [];
+  List<AlbumModel> _localAlbums = [];
   List<Song> _shuffledSongs = [];
   List<Song> _searchResults = [];
   bool _isFetchingLocal = false;
   bool _isPlayerExpanded = false;
   bool _isShuffleEnabled = false;
+  bool _isInitialized = false;
 
+  AudioHandler? get audioHandler => _audioHandler;
   List<Song> get localSongs => _localSongs;
+  List<AlbumModel> get localAlbums => _localAlbums;
   List<Song> get searchResults => _searchResults;
   bool get isPlayerExpanded => _isPlayerExpanded;
   bool get isFetchingLocal => _isFetchingLocal;
   bool get isShuffleEnabled => _isShuffleEnabled;
   bool get isMiniPlayerVisible => _audioHandler?.mediaItem.value != null;
-
-  bool _isInitialized = false;
 
   Future<void> init() async {
     if (_isInitialized) return;
@@ -66,19 +67,21 @@ class MusicProvider with ChangeNotifier {
 
       _isInitialized = true;
       notifyListeners();
-      await fetchLocalSongs();
+      await fetchLocalMusic();
     } catch (e) {
       print("Provider Init Error: $e");
     }
   }
 
-  Future<void> fetchLocalSongs() async {
+  Future<void> fetchLocalMusic() async {
     _isFetchingLocal = true;
     notifyListeners();
     try {
       if (await Permission.audio.request().isGranted ||
           await Permission.storage.request().isGranted) {
         final OnAudioQuery audioQuery = OnAudioQuery();
+        
+        // Fetch Songs
         List<SongModel> songs = await audioQuery.querySongs(
           sortType: SongSortType.DATE_ADDED,
           orderType: OrderType.DESC_OR_GREATER,
@@ -94,10 +97,20 @@ class MusicProvider with ChangeNotifier {
                   thumbUrl: "",
                   type: 'local',
                   localId: item.id,
+                  albumId: item.albumId,
                   duration: Duration(milliseconds: item.duration ?? 0),
                 ))
             .toList();
+
+        // Fetch Albums
+        _localAlbums = await audioQuery.queryAlbums(
+          sortType: AlbumSortType.ALBUM,
+          orderType: OrderType.ASC_OR_SMALLER,
+          uriType: UriType.EXTERNAL,
+          ignoreCase: true,
+        );
         
+        // Update queue
         if (_isShuffleEnabled) {
           _shuffledSongs = List.from(_localSongs)..shuffle();
           await _updateQueueWithSongs(_shuffledSongs);
@@ -106,11 +119,15 @@ class MusicProvider with ChangeNotifier {
         }
       }
     } catch (e) {
-      print("Local Fetch Error: $e");
+      print("Local Music Fetch Error: $e");
     } finally {
       _isFetchingLocal = false;
       notifyListeners();
     }
+  }
+
+  List<Song> getLocalSongsByAlbum(int albumId) {
+    return _localSongs.where((song) => song.albumId == albumId).toList();
   }
 
   Future<void> search(String query) async {
@@ -122,7 +139,6 @@ class MusicProvider with ChangeNotifier {
       _searchResults = results.map((video) => Song(
             id: video.id.value,
             title: video.title,
-            // ✅ FIX: Use 'artist' instead of 'author'.
             artist: video.author,
             thumbUrl: video.thumbnails.highResUrl,
             type: 'youtube',
@@ -155,20 +171,34 @@ class MusicProvider with ChangeNotifier {
     await handler.updateQueue(mediaItems);
   }
   
-  Future<void> play(Song song) async {
+  Future<void> play(Song song, {List<Song>? newQueue}) async {
     if (_audioHandler == null) await init();
 
     final mediaItem = _songToMediaItem(song);
+    List<Song> queueToPlay;
 
-    if (song.type == 'local') {
-      final queue = _isShuffleEnabled ? _shuffledSongs : _localSongs;
-      final index = queue.indexWhere((s) => s.id == song.id);
-      if (index != -1) {
-        await _audioHandler!.skipToQueueItem(index);
-      }
+    if (newQueue != null) {
+        queueToPlay = newQueue;
+        await _updateQueueWithSongs(queueToPlay);
+    } else if (song.type == 'local') {
+        queueToPlay = _isShuffleEnabled ? _shuffledSongs : _localSongs;
     } else {
-      await _audioHandler!.addQueueItem(mediaItem);
-      await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
+        await _audioHandler!.addQueueItem(mediaItem);
+        await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
+        _audioHandler!.play();
+        if (!_isPlayerExpanded) {
+          _isPlayerExpanded = true;
+          notifyListeners();
+        }
+        return;
+    }
+    
+    final index = queueToPlay.indexWhere((s) => s.id == song.id);
+    if (index != -1) {
+        await _audioHandler!.skipToQueueItem(index);
+    } else {
+        await _audioHandler!.addQueueItem(mediaItem);
+        await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
     }
     
     _audioHandler!.play();
@@ -178,6 +208,7 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
 
   MediaItem _songToMediaItem(Song s) {
     return MediaItem(
