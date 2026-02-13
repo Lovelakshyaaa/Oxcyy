@@ -1,161 +1,218 @@
-import 'package:flutter/services.dart';
-import 'package:audio_service/audio_service.dart';
-import 'package:audio_session/audio_session.dart';
-import 'package:just_audio/just_audio.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import '../utils/clients.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
+import 'package:on_audio_query/on_audio_query.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:audio_service/audio_service.dart';
+import '../services/audio_handler.dart';
 
-Future<AudioHandler> initAudioService() async {
-  return await AudioService.init(
-    builder: () => MyAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.oxcy.channel.audio',
-      androidNotificationChannelName: 'Music Playback',
-      androidNotificationIcon: 'mipmap/ic_launcher',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
-      androidShowNotificationBadge: true,
-    ),
-  );
+class Song {
+  final String id;
+  final String title;
+  final String artist;
+  final String thumbUrl;
+  final String type;
+  final int? localId;
+  final Duration? duration;
+
+  Song({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.thumbUrl,
+    required this.type,
+    this.localId,
+    this.duration,
+  });
 }
 
-class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  final AudioPlayer _player = AudioPlayer();
-  final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
-  
-  late final YoutubeExplode _youtubeVr;
-  late final YoutubeExplode _youtubeAndroid;
+class MusicProvider with ChangeNotifier {
+  AudioHandler? _audioHandler;
+  AudioHandler? get audioHandler => _audioHandler;
 
-  int _consecutiveErrors = 0;
-  static const int _maxConsecutiveErrors = 3;
+  final _yt = yt.YoutubeExplode();
 
-  MyAudioHandler() {
-    _youtubeVr = YoutubeExplode(createAndroidVrClient());
-    _youtubeAndroid = YoutubeExplode(createAndroidClient());
-    _init();
-    _notifyPlaybackEvents();
-    _listenForCurrentMediaItem();
-  }
+  List<Song> _localSongs = [];
+  List<Song> _shuffledSongs = [];
+  List<Song> _searchResults = [];
+  bool _isFetchingLocal = false;
+  bool _isPlayerExpanded = false;
+  bool _isShuffleEnabled = false;
+  List<Song> _originalQueue = [];
 
-  Future<void> _init() async {
-    final session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
-    await _player.setAudioSource(_playlist, preload: false);
-  }
+  List<Song> get localSongs => _localSongs;
+  List<Song> get searchResults => _searchResults;
+  bool get isPlayerExpanded => _isPlayerExpanded;
+  bool get isFetchingLocal => _isFetchingLocal;
+  bool get isShuffleEnabled => _isShuffleEnabled;
+  bool get isMiniPlayerVisible => _audioHandler?.mediaItem.value != null;
 
-  void _notifyPlaybackEvents() {
-    _player.playbackEventStream
-        .throttleTime(const Duration(milliseconds: 100))
-        .map(_transformEvent)
-        .listen(playbackState.add, onError: _handleStreamError);
-  }
+  bool _isInitialized = false;
 
-  void _listenForCurrentMediaItem() {
-    _player.sequenceStateStream
-        .throttleTime(const Duration(milliseconds: 100))
-        .listen((sequenceState) {
-      final currentItem = sequenceState?.currentSource?.tag as MediaItem?;
-      if (currentItem != null) mediaItem.add(currentItem);
-    }, onError: _handleStreamError);
-  }
-
-  void _handleStreamError(error, stackTrace) {
-    print('Stream error: $error');
-    _consecutiveErrors++;
-    if (_consecutiveErrors >= _maxConsecutiveErrors) {
-      stop();
-    }
-  }
-
-  @override
-  Future<void> updateQueue(List<MediaItem> newQueue) async {
-    queue.add(newQueue);
-    await _playlist.clear();
-    _consecutiveErrors = 0;
-
-    for (final item in newQueue) {
-      try {
-        AudioSource source;
-        if (item.genre == 'youtube') {
-          // Try VR first, then Android
-          source = await _getYoutubeSource(item);
-        } else {
-          source = AudioSource.uri(Uri.parse(item.id), tag: item);
-        }
-        await _playlist.add(source);
-      } catch (e) {
-        print('Failed to add ${item.title}: $e');
-        // Optionally add a dummy silent source to keep queue position
-      }
-    }
-  }
-
-  Future<AudioSource> _getYoutubeSource(MediaItem item) async {
+  Future<void> init() async {
+    if (_isInitialized) return;
     try {
-      final manifest = await _youtubeVr.videos.streamsClient.getManifest(item.id);
-      final audioUrl = manifest.audioOnly.withHighestBitrate().url;
-      return AudioSource.uri(audioUrl, tag: item);
+      if (await Permission.notification.isDenied) {
+        await Permission.notification.request();
+      }
+      _audioHandler = await initAudioService();
+      
+      // 🔥 Throttle mediaItem updates to reduce UI flicker
+      _audioHandler!.mediaItem
+          .throttleTime(const Duration(milliseconds: 100))
+          .listen((_) => notifyListeners());
+
+      _isInitialized = true;
+      notifyListeners();
+      await fetchLocalSongs();
     } catch (e) {
-      print('VR client failed, trying Android...');
-      final manifest = await _youtubeAndroid.videos.streamsClient.getManifest(item.id);
-      final audioUrl = manifest.audioOnly.withHighestBitrate().url;
-      return AudioSource.uri(audioUrl, tag: item);
+      print("Provider Init Error: $e");
     }
   }
 
-  @override
-  Future<void> skipToQueueItem(int index) async {
-    if (index < 0 || index >= _playlist.children.length) return;
-    await _player.seek(Duration.zero, index: index);
-    play();
+  Future<void> fetchLocalSongs() async {
+    _isFetchingLocal = true;
+    notifyListeners();
+    try {
+      if (await Permission.audio.request().isGranted ||
+          await Permission.storage.request().isGranted) {
+        final OnAudioQuery audioQuery = OnAudioQuery();
+        List<SongModel> songs = await audioQuery.querySongs(
+          sortType: SongSortType.DATE_ADDED,
+          orderType: OrderType.DESC_OR_GREATER,
+          uriType: UriType.EXTERNAL,
+          ignoreCase: true,
+        );
+        _localSongs = songs
+            .where((item) => (item.isMusic == true) && (item.duration ?? 0) > 10000)
+            .map((item) => Song(
+                  id: item.uri!,
+                  title: item.title,
+                  artist: item.artist ?? "Unknown",
+                  thumbUrl: "",
+                  type: 'local',
+                  localId: item.id,
+                  duration: Duration(milliseconds: item.duration ?? 0),
+                ))
+            .toList();
+        if (_isShuffleEnabled) {
+          _shuffledSongs = List.from(_localSongs)..shuffle();
+        }
+      }
+    } catch (e) {
+      print("Local Fetch Error: $e");
+    }
+    _isFetchingLocal = false;
+    notifyListeners();
   }
 
-  @override
-  Future<void> skipToNext() => _player.seekToNext();
-  @override
-  Future<void> skipToPrevious() => _player.seekToPrevious();
-  @override
-  Future<void> play() => _player.play();
-  @override
-  Future<void> pause() => _player.pause();
-  @override
-  Future<void> seek(Duration position) => _player.seek(position);
-  @override
-  Future<void> stop() async {
-    await _player.stop();
-    await super.stop();
-    _consecutiveErrors = 0;
+  Future<void> search(String query) async {
+    if (query.isEmpty) return;
+    _searchResults = [];
+    notifyListeners();
+    try {
+      var results = await _yt.search.getVideos(query);
+      _searchResults = results.map((video) => Song(
+            id: video.id.value,
+            title: video.title,
+            artist: video.author,
+            thumbUrl: video.thumbnails.highResUrl,
+            type: 'youtube',
+            duration: video.duration,
+          )).toList();
+      notifyListeners();
+    } catch (e) {
+      print("Search Error: $e");
+    }
   }
 
-  PlaybackState _transformEvent(PlaybackEvent event) {
-    final playing = _player.playing;
-    final queueSize = _playlist.children.length;
-    return PlaybackState(
-      controls: [
-        if (queueSize > 1) MediaControl.skipToPrevious,
-        if (playing) MediaControl.pause else MediaControl.play,
-        if (queueSize > 1) MediaControl.skipToNext,
-        MediaControl.stop,
-      ],
-      systemActions: const {
-        MediaAction.seek,
-        MediaAction.seekForward,
-        MediaAction.seekBackward,
-      },
-      androidCompactActionIndices: queueSize > 1 ? [0, 1, 2] : [0, 1],
-      processingState: const {
-        ProcessingState.idle: AudioProcessingState.idle,
-        ProcessingState.loading: AudioProcessingState.loading,
-        ProcessingState.buffering: AudioProcessingState.buffering,
-        ProcessingState.ready: AudioProcessingState.ready,
-        ProcessingState.completed: AudioProcessingState.completed,
-      }[_player.processingState]!,
-      playing: playing,
-      updatePosition: _player.position,
-      bufferedPosition: _player.bufferedPosition,
-      speed: _player.speed,
-      queueIndex: event.currentIndex,
+  Future<void> toggleShuffle() async {
+    if (_audioHandler == null) return;
+    _isShuffleEnabled = !_isShuffleEnabled;
+    if (_isShuffleEnabled) {
+      _shuffledSongs = List.from(_localSongs)..shuffle();
+      await _updateQueueWithSongs(_shuffledSongs);
+    } else {
+      await _updateQueueWithSongs(_localSongs);
+    }
+    notifyListeners();
+  }
+
+  Future<void> _updateQueueWithSongs(List<Song> songs) async {
+    final handler = _audioHandler as MyAudioHandler;
+    final mediaItems = songs.map(_songToMediaItem).toList();
+    await handler.updateQueue(mediaItems);
+  }
+
+  MediaItem _songToMediaItem(Song s) {
+    return MediaItem(
+      id: s.id,
+      album: s.type == 'local' ? "Local Music" : "YouTube",
+      title: s.title,
+      artist: s.artist,
+      artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
+      genre: s.type,
+      duration: s.duration,
+      extras: {'artworkId': s.localId},
     );
+  }
+
+  Future<void> play(Song song) async {
+    if (_audioHandler == null) await init();
+    final handler = _audioHandler as MyAudioHandler;
+
+    List<Song> songQueue;
+    int initialIndex;
+
+    if (song.type == 'local') {
+      if (_isShuffleEnabled) {
+        songQueue = _shuffledSongs;
+        initialIndex = _shuffledSongs.indexWhere((s) => s.id == song.id);
+        if (initialIndex < 0) {
+          songQueue = _localSongs;
+          initialIndex = _localSongs.indexWhere((s) => s.id == song.id);
+        }
+      } else {
+        songQueue = _localSongs;
+        initialIndex = _localSongs.indexWhere((s) => s.id == song.id);
+      }
+    } else {
+      // YouTube: single song (or you could queue search results later)
+      songQueue = [song];
+      initialIndex = 0;
+    }
+
+    if (initialIndex < 0) return;
+
+    final mediaItems = songQueue.map(_songToMediaItem).toList();
+
+    await handler.updateQueue(mediaItems);
+    await handler.skipToQueueItem(initialIndex);
+
+    // Expand player UI
+    _isPlayerExpanded = true;
+    notifyListeners();
+  }
+
+  void togglePlayPause() {
+    if (_audioHandler?.playbackState.value.playing == true) {
+      _audioHandler!.pause();
+    } else {
+      _audioHandler!.play();
+    }
+  }
+
+  void next() => (_audioHandler as QueueHandler?)?.skipToNext();
+  void previous() => (_audioHandler as QueueHandler?)?.skipToPrevious();
+  void seek(Duration pos) => _audioHandler?.seek(pos);
+
+  void togglePlayerView() {
+    _isPlayerExpanded = !_isPlayerExpanded;
+    notifyListeners();
+  }
+
+  void collapsePlayer() {
+    _isPlayerExpanded = false;
+    notifyListeners();
   }
 }
