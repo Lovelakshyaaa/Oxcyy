@@ -63,7 +63,7 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
-  // 🔥 IMPROVED: Request high-res artwork by setting width/height
+  // 🔥 FIXED: artworkHeight/Width now receive double (size), not int
   Widget _buildArtwork(MediaItem mediaItem, double size, {bool highRes = false}) {
     final isLocal = mediaItem.genre == 'local';
     if (isLocal) {
@@ -80,8 +80,8 @@ class SmartPlayer extends StatelessWidget {
         keepOldArtwork: true,
         quality: 100,
         artworkQuality: FilterQuality.high,
-        artworkHeight: size.toInt(),   // 🔥 NEW: request exact size
-        artworkWidth: size.toInt(),    // 🔥 NEW: request exact size
+        artworkHeight: size,   // ✅ now double
+        artworkWidth: size,    // ✅ now double
         nullArtworkWidget: Container(
           color: Colors.grey[900],
           child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
@@ -264,7 +264,7 @@ class SmartPlayer extends StatelessWidget {
                         stream: AudioService.position,
                         builder: (context, snapshot) {
                           final position = snapshot.data ?? Duration.zero;
-                          final duration = mediaItem.duration ?? Duration.zero; // now has value!
+                          final duration = mediaItem.duration ?? Duration.zero;
                           return Padding(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 20),
