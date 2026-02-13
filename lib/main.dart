@@ -3,22 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart'; 
-import 'package:audio_service/audio_service.dart'; // ⚠️ REQUIRED
+import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/local_music_screen.dart';
 import 'package:oxcy/screens/home_screen.dart'; 
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
 
-// ⚠️ MAKE MAIN ASYNC TO AWAIT INITIALIZATION
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. BOOTSTRAP: Initialize the Provider & Audio Service BEFORE the UI boots
   final musicProvider = MusicProvider();
-  await musicProvider.init(); // This calls initAudioService() internally
+  await musicProvider.init();
 
-  // 2. EXTRACTION: Get the now-alive AudioHandler
   final audioHandler = musicProvider.audioHandler;
 
   if (audioHandler == null) {
@@ -28,11 +25,8 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        // 3. PROVIDE AUDIO HANDLER GLOBALLY (The Firebase Recommendation)
         if (audioHandler != null)
           Provider<AudioHandler>.value(value: audioHandler),
-        
-        // 4. PROVIDE THE INITIALIZED MUSIC PROVIDER
         ChangeNotifierProvider<MusicProvider>.value(value: musicProvider),
       ],
       child: MyApp(),
@@ -70,17 +64,16 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    // We try to get the AudioHandler to listen for REAL-TIME updates
     final AudioHandler? handler = Provider.of<AudioHandler?>(context);
     final provider = Provider.of<MusicProvider>(context);
     
     return Scaffold(
-      backgroundColor: Color(0xFF0F0C29), 
+      backgroundColor: const Color(0xFF0F0C29), 
       body: Stack(
         children: [
-          // 1. BACKGROUND
+          // Background gradient
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -93,36 +86,32 @@ class _MainScaffoldState extends State<MainScaffold> {
             ),
           ),
           
-          // 2. CONTENT
+          // Main content pages (My Music / Search)
           IndexedStack(
             index: _currentIndex,
             children: _pages,
           ),
           
-          // 3. PLAYER (The Fix: Reactive Visibility)
-          // We use StreamBuilder to show the player INSTANTLY when a song loads
+          // Player – shown only when a song is playing
           if (handler != null)
             StreamBuilder<MediaItem?>(
               stream: handler.mediaItem,
               builder: (context, snapshot) {
-                // Show player if MediaItem exists OR if Provider thinks it should show
                 final bool showPlayer = snapshot.hasData || provider.isMiniPlayerVisible;
-                
-                if (!showPlayer) return SizedBox.shrink();
+                if (!showPlayer) return const SizedBox.shrink();
 
                 return Positioned(
                   left: 0, 
                   right: 0, 
                   bottom: provider.isPlayerExpanded ? 0 : 85,
                   top: provider.isPlayerExpanded ? 0 : null,
-                  // *** THE FIX IS HERE ***
-                  // The audioHandler parameter has been removed.
-                  child: SmartPlayer(),
+                  // 🔥 KEY FIX: Force rebuild when media item changes (prevents flicker)
+                  child: SmartPlayer(key: ValueKey(snapshot.data?.id)),
                 );
               }
             ),
 
-          // 4. CRYSTAL GLASS NAV BAR
+          // Glass navigation bar (hidden when player expanded)
           if (!provider.isPlayerExpanded) 
             Positioned(
               left: 0, right: 0, bottom: 0,
@@ -165,7 +154,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         unselectedItemColor: Colors.white60,
         type: BottomNavigationBarType.fixed,
         onTap: (index) => setState(() => _currentIndex = index),
-        items: [
+        items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.music_note_rounded),
             label: "My Music",
