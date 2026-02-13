@@ -3,6 +3,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:rxdart/rxdart.dart'; // 🔥 ADD THIS IMPORT
 import '../utils/clients.dart';
 import 'dart:async';
 
