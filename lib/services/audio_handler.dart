@@ -3,7 +3,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import '../utils/clients.dart'; // ⚠️ Make sure path is correct
+import '../utils/clients.dart';  // ⚠️ Adjust path if needed
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -23,12 +23,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
   
-  // Use custom clients for better YouTube compatibility
+  // ✅ Use the VR client for best YouTube compatibility
   late final YoutubeExplode _youtube;
 
   MyAudioHandler() {
-    // ✅ FIXED: Pass custom client as positional argument, not named
-    _youtube = YoutubeExplode(customAndroidVr);
+    _youtube = YoutubeExplode(createAndroidVrClient());  // ✅ Fixed
     _init();
     _notifyPlaybackEvents();
     _listenForCurrentMediaItem();
