@@ -9,6 +9,7 @@ import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/services/audio_handler.dart';
 
 // Main SmartPlayer widget: Handles the overall structure and animations.
 class SmartPlayer extends StatelessWidget {
@@ -122,7 +123,7 @@ class FullPlayerView extends StatelessWidget {
               const SizedBox(height: 20),
               
               // Dynamic UI elements (the controls)
-              _FullPlayerControls(audioHandler: audioHandler as MyAudioHandler),
+              _FullPlayerControls(audioHandler: audioHandler),
               
               const Spacer(),
             ],
@@ -272,7 +273,7 @@ class _MiniPlayerControls extends StatelessWidget {
 }
 
 class _FullPlayerControls extends StatelessWidget {
-  final MyAudioHandler audioHandler;
+  final AudioHandler audioHandler;
   const _FullPlayerControls({required this.audioHandler});
 
   @override
