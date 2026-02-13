@@ -123,23 +123,18 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
                         style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)
                       ),
                       
-                      // *** THE FIX IS HERE ***
+                      // *** FIXED: Now includes duration for proper slider & time display ***
                       onTap: () {
-                        // 1. Create a `Song` object from the `SongModel` that
-                        //    the provider's `play` method expects.
                         final songToPlay = Song(
-                            id: song.uri!,
-                            title: song.title,
-                            artist: song.artist ?? "Unknown",
-                            thumbUrl: "", // Not applicable for local songs
-                            type: 'local',
-                            localId: song.id);
-
-                        // 2. Delegate playback to the provider. It will handle all logic.
+                          id: song.uri!,
+                          title: song.title,
+                          artist: song.artist ?? "Unknown",
+                          thumbUrl: "",
+                          type: 'local',
+                          localId: song.id,
+                          duration: Duration(milliseconds: song.duration ?? 0),
+                        );
                         provider.play(songToPlay);
-
-                        // 3. The incorrect `Navigator.push` is removed, which resolves
-                        //    the "No named parameter" build error.
                       },
                     );
                   },
