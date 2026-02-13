@@ -3,7 +3,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import '../utils/clients.dart'; // ⚠️ Adjust path if needed
+import '../utils/clients.dart';
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -26,7 +26,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   late final YoutubeExplode _youtube;
 
   MyAudioHandler() {
-    // ✅ Use VR client for best YouTube compatibility
     _youtube = YoutubeExplode(createAndroidVrClient());
     _init();
     _notifyPlaybackEvents();
@@ -59,15 +58,31 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       try {
         AudioSource source;
         if (item.genre == 'youtube') {
-          final manifest = await _youtube.videos.streamsClient.getManifest(item.id);
-          final audioUrl = manifest.audioOnly.withHighestBitrate().url;
-          source = AudioSource.uri(audioUrl, tag: item);
+          // Try VR client first, fallback to Android client
+          try {
+            final manifest = await _youtube.videos.streamsClient.getManifest(item.id);
+            final audioUrl = manifest.audioOnly.withHighestBitrate().url;
+            source = AudioSource.uri(audioUrl, tag: item);
+          } catch (e) {
+            print('VR client failed, trying Android client...');
+            // Fallback to Android client
+            final fallbackYoutube = YoutubeExplode(createAndroidClient());
+            final manifest = await fallbackYoutube.videos.streamsClient.getManifest(item.id);
+            final audioUrl = manifest.audioOnly.withHighestBitrate().url;
+            source = AudioSource.uri(audioUrl, tag: item);
+          }
         } else {
           source = AudioSource.uri(Uri.parse(item.id), tag: item);
         }
         await _playlist.add(source);
       } catch (e) {
         print('Failed to add ${item.title}: $e');
+        // Create a dummy source that shows error (optional)
+        final errorItem = item.copyWith(
+          title: '⚠️ ${item.title}',
+          artist: 'Playback failed',
+        );
+        // We could add a silent audio source or just skip
       }
     }
   }
@@ -97,9 +112,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   PlaybackState _transformEvent(PlaybackEvent event) {
+    final playing = _player.playing;
+    final queueSize = _playlist.children.length;
     return PlaybackState(
       controls: [
-        if (_player.playing) MediaControl.pause else MediaControl.play,
+        if (queueSize > 1) MediaControl.skipToPrevious,
+        if (playing) MediaControl.pause else MediaControl.play,
+        if (queueSize > 1) MediaControl.skipToNext,
         MediaControl.stop,
       ],
       systemActions: const {
@@ -107,7 +126,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         MediaAction.seekForward,
         MediaAction.seekBackward,
       },
-      androidCompactActionIndices: const [0, 1],
+      androidCompactActionIndices: queueSize > 1 ? [0, 1, 2] : [0, 1], // prev, play/pause, next
       processingState: const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
@@ -115,7 +134,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ProcessingState.ready: AudioProcessingState.ready,
         ProcessingState.completed: AudioProcessingState.completed,
       }[_player.processingState]!,
-      playing: _player.playing,
+      playing: playing,
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
