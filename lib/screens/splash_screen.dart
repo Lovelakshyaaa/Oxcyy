@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/main.dart'; 
+import 'package:oxcy/screens/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
+  const SplashScreen({Key? key}) : super(key: key);
+
   @override
   _SplashScreenState createState() => _SplashScreenState();
 }
@@ -12,24 +15,17 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initApp();
-    });
+    _navigateToHome();
   }
 
-  Future<void> _initApp() async {
-    final provider = Provider.of<MusicProvider>(context, listen: false);
-    
-    // 1. Initialize Engine
-    await provider.init();
-    
-    // 2. Force a delay so the splash looks nice (Fixes "Half Second" glitch)
-    await Future.delayed(Duration(seconds: 2));
-    
-    // 3. Navigate
+  Future<void> _navigateToHome() async {
+    // The MusicProvider now initializes itself, so we just wait for it to be ready.
+    // A slight delay can ensure that the provider has fetched initial data if needed.
+    await Future.delayed(const Duration(seconds: 3));
+
     if (mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => MainScaffold()),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
     }
   }
@@ -37,26 +33,30 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF0F0C29),
+      backgroundColor: const Color(0xFF1A1A2E), // Deep dark blue
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.music_note_rounded, size: 100, color: Colors.purpleAccent),
-            SizedBox(height: 20),
             Text(
-              "OXCY", 
+              'OxyMusic',
               style: TextStyle(
-                color: Colors.white, 
-                fontSize: 32, 
+                fontFamily: 'Poppins',
+                fontSize: 48,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 2
-              )
+                color: Colors.white,
+                letterSpacing: 2.0,
+              ),
             ),
-            SizedBox(height: 40),
-            CircularProgressIndicator(color: Colors.purpleAccent),
-            SizedBox(height: 20),
-            Text("Starting Engine...", style: TextStyle(color: Colors.white54)),
+            const SizedBox(height: 10),
+            Text(
+              'Your Music, Your Way',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 16,
+                color: Colors.white70,
+              ),
+            ),
           ],
         ),
       ),

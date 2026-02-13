@@ -10,31 +10,18 @@ import 'package:oxcy/screens/home_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  final musicProvider = MusicProvider();
-  await musicProvider.init();
-
-  final audioHandler = musicProvider.audioHandler;
-
-  if (audioHandler == null) {
-    print("CRITICAL: AudioHandler failed to initialize!");
-  }
-
+void main() {
   runApp(
-    MultiProvider(
-      providers: [
-        if (audioHandler != null)
-          Provider<AudioHandler>.value(value: audioHandler),
-        ChangeNotifierProvider<MusicProvider>.value(value: musicProvider),
-      ],
-      child: MyApp(),
+    ChangeNotifierProvider(
+      create: (context) => MusicProvider(),
+      child: const MyApp(),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -44,12 +31,14 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.transparent, 
         textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
       ),
-      home: SplashScreen(),
+      home: const SplashScreen(),
     );
   }
 }
 
 class MainScaffold extends StatefulWidget {
+  const MainScaffold({Key? key}) : super(key: key);
+
   @override
   _MainScaffoldState createState() => _MainScaffoldState();
 }
@@ -58,20 +47,19 @@ class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
   
   final List<Widget> _pages = [
-    LocalMusicScreen(), 
-    HomeScreen(),       
+    const LocalMusicScreen(), 
+    const HomeScreen(),       
   ];
 
   @override
   Widget build(BuildContext context) {
-    final AudioHandler? handler = Provider.of<AudioHandler?>(context);
-    final provider = Provider.of<MusicProvider>(context);
-    
+    final provider = context.watch<MusicProvider>();
+    final audioHandler = provider.audioHandler;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0C29), 
       body: Stack(
         children: [
-          // Background gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -86,32 +74,26 @@ class _MainScaffoldState extends State<MainScaffold> {
             ),
           ),
           
-          // Main content pages (My Music / Search)
           IndexedStack(
             index: _currentIndex,
             children: _pages,
           ),
           
-          // Player – shown only when a song is playing
-          if (handler != null)
+          if (audioHandler != null)
             StreamBuilder<MediaItem?>(
-              stream: handler.mediaItem,
+              stream: audioHandler.mediaItem,
               builder: (context, snapshot) {
-                final bool showPlayer = snapshot.hasData || provider.isMiniPlayerVisible;
-                if (!showPlayer) return const SizedBox.shrink();
-
+                if (!snapshot.hasData) return const SizedBox.shrink();
                 return Positioned(
                   left: 0, 
                   right: 0, 
                   bottom: provider.isPlayerExpanded ? 0 : 85,
                   top: provider.isPlayerExpanded ? 0 : null,
-                  // 🔥 KEY FIX: Force rebuild when media item changes (prevents flicker)
-                  child: SmartPlayer(key: ValueKey(snapshot.data?.id)),
+                  child: const SmartPlayer(),
                 );
               }
             ),
 
-          // Glass navigation bar (hidden when player expanded)
           if (!provider.isPlayerExpanded) 
             Positioned(
               left: 0, right: 0, bottom: 0,
