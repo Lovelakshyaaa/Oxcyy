@@ -4,6 +4,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:rxdart/rxdart.dart'; // 🔥 ADD THIS IMPORT
 import '../services/audio_handler.dart';
 
 class Song {
