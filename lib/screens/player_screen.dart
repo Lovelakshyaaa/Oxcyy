@@ -28,6 +28,7 @@ class SmartPlayer extends StatelessWidget {
         final double height = uiProvider.isPlayerExpanded ? screenHeight : 70.0;
 
         return AnimatedContainer(
+          key: ValueKey(mediaItem.id),
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
           height: height,
