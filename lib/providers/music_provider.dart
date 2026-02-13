@@ -32,13 +32,12 @@ class MusicProvider with ChangeNotifier {
 
   final _yt = yt.YoutubeExplode();
 
-  List<Song> _localSongs = [];          // original order from storage
-  List<Song> _shuffledSongs = [];        // shuffled copy (if shuffle enabled)
+  List<Song> _localSongs = [];
+  List<Song> _shuffledSongs = [];
   List<Song> _searchResults = [];
   bool _isFetchingLocal = false;
   bool _isPlayerExpanded = false;
   bool _isShuffleEnabled = false;
-  List<Song> _originalQueue = [];        // kept for reset, but we now use _localSongs directly
 
   List<Song> get localSongs => _localSongs;
   List<Song> get searchResults => _searchResults;
@@ -90,7 +89,6 @@ class MusicProvider with ChangeNotifier {
                   duration: Duration(milliseconds: item.duration ?? 0),
                 ))
             .toList();
-        // If shuffle is enabled, also update shuffled list
         if (_isShuffleEnabled) {
           _shuffledSongs = List.from(_localSongs)..shuffle();
         }
@@ -125,13 +123,10 @@ class MusicProvider with ChangeNotifier {
   Future<void> toggleShuffle() async {
     if (_audioHandler == null) return;
     _isShuffleEnabled = !_isShuffleEnabled;
-
     if (_isShuffleEnabled) {
-      // Create a shuffled copy and update the queue
       _shuffledSongs = List.from(_localSongs)..shuffle();
       await _updateQueueWithSongs(_shuffledSongs);
     } else {
-      // Restore original order
       await _updateQueueWithSongs(_localSongs);
     }
     notifyListeners();
@@ -145,7 +140,7 @@ class MusicProvider with ChangeNotifier {
 
   MediaItem _songToMediaItem(Song s) {
     return MediaItem(
-      id: s.id,
+      id: s.type == 'youtube' ? s.id : s.id, // YouTube uses video ID, local uses URI
       album: s.type == 'local' ? "Local Music" : "YouTube",
       title: s.title,
       artist: s.artist,
@@ -165,11 +160,8 @@ class MusicProvider with ChangeNotifier {
 
     if (song.type == 'local') {
       if (_isShuffleEnabled) {
-        // Use the shuffled list as the queue
         songQueue = _shuffledSongs;
-        // Find the song's position in the shuffled list
         initialIndex = _shuffledSongs.indexWhere((s) => s.id == song.id);
-        // If not found (shouldn't happen), fallback to original
         if (initialIndex < 0) {
           songQueue = _localSongs;
           initialIndex = _localSongs.indexWhere((s) => s.id == song.id);
@@ -179,7 +171,7 @@ class MusicProvider with ChangeNotifier {
         initialIndex = _localSongs.indexWhere((s) => s.id == song.id);
       }
     } else {
-      // YouTube: single song
+      // YouTube: single song queue, but we can also add the search results as queue later
       songQueue = [song];
       initialIndex = 0;
     }
@@ -188,6 +180,7 @@ class MusicProvider with ChangeNotifier {
 
     final mediaItems = songQueue.map(_songToMediaItem).toList();
 
+    // Update queue first, then skip to the selected index
     await handler.updateQueue(mediaItems);
     await handler.skipToQueueItem(initialIndex);
 
