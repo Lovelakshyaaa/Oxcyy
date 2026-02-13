@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'player_screen.dart'; // To open the player
+// To open the player
 
 class LocalMusicScreen extends StatefulWidget {
   @override

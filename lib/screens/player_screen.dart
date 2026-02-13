@@ -15,9 +15,7 @@ class SmartPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final uiProvider = Provider.of<MusicProvider>(context);
-    final audioHandler = uiProvider.audioHandler;
-
+    final audioHandler = context.read<MusicProvider>().audioHandler;
     if (audioHandler == null) return const SizedBox.shrink();
 
     return StreamBuilder<MediaItem?>(
@@ -26,47 +24,55 @@ class SmartPlayer extends StatelessWidget {
         final mediaItem = mediaItemSnapshot.data;
         if (mediaItem == null) return const SizedBox.shrink();
 
-        final double screenHeight = MediaQuery.of(context).size.height;
-        final double height = uiProvider.isPlayerExpanded ? screenHeight : 70.0;
+        return Selector<MusicProvider, bool>(
+          selector: (_, provider) => provider.isPlayerExpanded,
+          builder: (context, isPlayerExpanded, _) {
+            final double screenHeight = MediaQuery.of(context).size.height;
+            final double height = isPlayerExpanded ? screenHeight : 70.0;
 
-        return AnimatedContainer(
-          key: ValueKey(mediaItem.id),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          height: height,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
-            borderRadius: uiProvider.isPlayerExpanded
-                ? BorderRadius.zero
-                : const BorderRadius.vertical(top: Radius.circular(16)),
-            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
-          ),
-          child: StreamBuilder<PlaybackState>(
-            stream: audioHandler.playbackState,
-            builder: (context, playbackStateSnapshot) {
-              final state = playbackStateSnapshot.data;
-              final playing = state?.playing ?? false;
-              final processingState =
-                  state?.processingState ?? AudioProcessingState.idle;
-
-              return Stack(
-                children: [
-                  if (uiProvider.isPlayerExpanded)
-                    _buildFullScreen(context, uiProvider, audioHandler,
-                        mediaItem, playing, processingState)
-                  else
-                    _buildMiniPlayer(context, uiProvider, audioHandler,
-                        mediaItem, playing, processingState),
+            return AnimatedContainer(
+              key: ValueKey(mediaItem.id),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              height: height,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A2E),
+                borderRadius: isPlayerExpanded
+                    ? BorderRadius.zero
+                    : const BorderRadius.vertical(top: Radius.circular(16)),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black45, blurRadius: 10)
                 ],
-              );
-            },
-          ),
+              ),
+              child: StreamBuilder<PlaybackState>(
+                stream: audioHandler.playbackState,
+                builder: (context, playbackStateSnapshot) {
+                  final state = playbackStateSnapshot.data;
+                  final playing = state?.playing ?? false;
+                  final processingState =
+                      state?.processingState ?? AudioProcessingState.idle;
+
+                  return Stack(
+                    children: [
+                      if (isPlayerExpanded)
+                        _buildFullScreen(context, audioHandler, mediaItem,
+                            playing, processingState)
+                      else
+                        _buildMiniPlayer(context, audioHandler, mediaItem,
+                            playing, processingState),
+                    ],
+                  );
+                },
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildArtwork(MediaItem mediaItem, double size, {bool highRes = false}) {
+  Widget _buildArtwork(MediaItem mediaItem, double size,
+      {bool highRes = false}) {
     final isLocal = mediaItem.genre == 'local';
     if (isLocal) {
       final artworkId = mediaItem.extras?['artworkId'] as int?;
@@ -108,7 +114,6 @@ class SmartPlayer extends StatelessWidget {
 
   Widget _buildMiniPlayer(
     BuildContext context,
-    MusicProvider uiProvider,
     AudioHandler handler,
     MediaItem mediaItem,
     bool playing,
@@ -118,7 +123,7 @@ class SmartPlayer extends StatelessWidget {
         processingState == AudioProcessingState.buffering;
 
     return GestureDetector(
-      onTap: uiProvider.togglePlayerView,
+      onTap: () => context.read<MusicProvider>().togglePlayerView(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         color: Colors.transparent,
@@ -159,11 +164,9 @@ class SmartPlayer extends StatelessWidget {
               )
             else
               IconButton(
-                icon: Icon(
-                    playing ? Icons.pause : Icons.play_arrow,
+                icon: Icon(playing ? Icons.pause : Icons.play_arrow,
                     color: Colors.white),
-                onPressed: () =>
-                    playing ? handler.pause() : handler.play(),
+                onPressed: () => playing ? handler.pause() : handler.play(),
               ),
           ],
         ),
@@ -173,7 +176,6 @@ class SmartPlayer extends StatelessWidget {
 
   Widget _buildFullScreen(
     BuildContext context,
-    MusicProvider uiProvider,
     AudioHandler handler,
     MediaItem mediaItem,
     bool playing,
@@ -205,7 +207,8 @@ class SmartPlayer extends StatelessWidget {
                   child: IconButton(
                     icon: const Icon(Icons.keyboard_arrow_down,
                         color: Colors.white, size: 30),
-                    onPressed: uiProvider.collapsePlayer,
+                    onPressed: () =>
+                        context.read<MusicProvider>().collapsePlayer(),
                   ),
                 ),
                 const Spacer(),
@@ -376,24 +379,23 @@ class __HighResArtworkState extends State<_HighResArtwork> {
 
     setState(() => _isLoading = true);
     try {
-      // ✅ FIXED: positional arguments id and type, then named parameters
       final artwork = await _audioQuery.queryArtwork(
         artworkId,
         ArtworkType.AUDIO,
-        size: -1,   // request large size
+        size: -1, // request large size
         quality: 100,
       );
-      if (artwork != null) {
+      if (mounted) {
         setState(() {
           _artworkBytes = artwork;
           _isLoading = false;
         });
-      } else {
-        setState(() => _isLoading = false);
       }
     } catch (e) {
       print('Artwork load error: $e');
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -433,7 +435,8 @@ class __HighResArtworkState extends State<_HighResArtwork> {
           width: widget.size,
           height: widget.size,
           color: Colors.grey[900],
-          child: Icon(Icons.music_note, color: Colors.white, size: widget.size * 0.3),
+          child:
+              Icon(Icons.music_note, color: Colors.white, size: widget.size * 0.3),
         );
       }
     } else {
@@ -462,7 +465,8 @@ class __HighResArtworkState extends State<_HighResArtwork> {
           ),
           errorWidget: (context, url, error) => Container(
             color: Colors.grey[900],
-            child: Icon(Icons.music_note, color: Colors.white, size: widget.size * 0.3),
+            child: Icon(Icons.music_note,
+                color: Colors.white, size: widget.size * 0.3),
           ),
         ),
       );
@@ -470,7 +474,7 @@ class __HighResArtworkState extends State<_HighResArtwork> {
   }
 }
 
-// ==================== FIXED SLIDER ====================
+
 class _PositionSlider extends StatefulWidget {
   const _PositionSlider({required this.mediaItem, required this.handler});
 
@@ -483,84 +487,75 @@ class _PositionSlider extends StatefulWidget {
 
 class __PositionSliderState extends State<_PositionSlider> {
   double? _dragValue;
-  late final Stream<Duration> _positionStream;
-
-  @override
-  void initState() {
-    super.initState();
-    _positionStream = AudioService.position
-        .throttleTime(const Duration(milliseconds: 500))
-        .distinct();
-  }
+  
+  Stream<Duration> get _positionStream => AudioService.position;
 
   @override
   Widget build(BuildContext context) {
     final duration = widget.mediaItem.duration ?? Duration.zero;
-    final bool durationKnown = duration.inMilliseconds > 0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          // Current position display
-          StreamBuilder<Duration>(
-            stream: _positionStream,
-            builder: (context, snapshot) {
-              final position = snapshot.data ?? Duration.zero;
-              final displayPosition = _dragValue != null
-                  ? Duration(milliseconds: _dragValue!.toInt())
-                  : position;
-              return Text(
-                _formatDuration(displayPosition),
+      child: StreamBuilder<Duration>(
+        stream: _positionStream,
+        builder: (context, snapshot) {
+          final position = snapshot.data ?? Duration.zero;
+          final currentSliderValue = _dragValue ?? position.inMilliseconds.toDouble();
+          final maxSliderValue = duration.inMilliseconds.toDouble();
+          if (currentSliderValue > maxSliderValue) {
+            // This can happen if a new, shorter song starts playing
+            // while the user is still dragging.
+            _dragValue = null; // Reset drag
+          }
+          
+          return Row(
+            children: [
+              Text(
+                _formatDuration(Duration(milliseconds: currentSliderValue.round())),
                 style: const TextStyle(color: Colors.white54, fontSize: 12),
-              );
-            },
-          ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 4,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: SliderComponentShape.noOverlay,
               ),
-              child: StreamBuilder<Duration>(
-                stream: _positionStream,
-                builder: (context, snapshot) {
-                  final position = snapshot.data ?? Duration.zero;
-                  final currentValue = _dragValue ?? position.inMilliseconds.toDouble();
-                  return Slider(
-                    value: currentValue.clamp(0, duration.inMilliseconds.toDouble()),
-                    min: 0,
-                    max: durationKnown ? duration.inMilliseconds.toDouble() : 1,
-                    activeColor: Colors.purpleAccent,
-                    inactiveColor: Colors.white10,
-                    onChanged: durationKnown
-                        ? (value) {
-                            setState(() => _dragValue = value);
-                          }
-                        : null,
-                    onChangeEnd: (value) {
-                      setState(() => _dragValue = null);
-                      widget.handler.seek(Duration(milliseconds: value.toInt()));
+              Expanded(
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 4,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: SliderComponentShape.noOverlay,
+                    activeTrackColor: Colors.purpleAccent,
+                    inactiveTrackColor: Colors.white10,
+                    thumbColor: Colors.purpleAccent,
+                  ),
+                  child: Slider(
+                    min: 0.0,
+                    max: maxSliderValue > 0 ? maxSliderValue : 1.0,
+                    value: currentSliderValue.clamp(0.0, maxSliderValue),
+                    onChanged: (value) {
+                      setState(() {
+                        _dragValue = value;
+                      });
                     },
-                  );
-                },
+                    onChangeEnd: (value) {
+                      widget.handler.seek(Duration(milliseconds: value.round()));
+                      setState(() {
+                        _dragValue = null; 
+                      });
+                    },
+                  ),
+                ),
               ),
-            ),
-          ),
-          // Total duration
-          Text(
-            _formatDuration(duration),
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-        ],
+              Text(
+                _formatDuration(duration),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   String _formatDuration(Duration d) {
-    final min = d.inMinutes;
-    final sec = d.inSeconds % 60;
-    return '$min:${sec.toString().padLeft(2, '0')}';
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 }

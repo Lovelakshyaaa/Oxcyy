@@ -3,7 +3,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import 'package:rxdart/rxdart.dart'; // 🔥 ADD THIS IMPORT
+import 'package:rxdart/rxdart.dart';
 import '../utils/clients.dart';
 import 'dart:async';
 
@@ -28,123 +28,122 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   late final YoutubeExplode _youtubeVr;
   late final YoutubeExplode _youtubeAndroid;
 
-  int _consecutiveErrors = 0;
-  static const int _maxConsecutiveErrors = 3;
+  final _mediaItemStreamController = BehaviorSubject<MediaItem?>.seeded(null);
 
   MyAudioHandler() {
     _youtubeVr = YoutubeExplode(createAndroidVrClient());
     _youtubeAndroid = YoutubeExplode(createAndroidClient());
     _init();
-    _notifyPlaybackEvents();
-    _listenForCurrentMediaItem();
   }
 
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
     await _player.setAudioSource(_playlist, preload: false);
-  }
 
-  void _notifyPlaybackEvents() {
-    _player.playbackEventStream
-        .throttleTime(const Duration(milliseconds: 100))
-        .map(_transformEvent)
-        .listen(playbackState.add, onError: _handleStreamError);
-  }
+    // Propagate player events to the UI
+    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
-  void _listenForCurrentMediaItem() {
-    _player.sequenceStateStream
-        .throttleTime(const Duration(milliseconds: 100))
-        .listen((sequenceState) {
+    // Report the current media item
+    _player.sequenceStateStream.listen((sequenceState) {
       final currentItem = sequenceState?.currentSource?.tag as MediaItem?;
       if (currentItem != null) mediaItem.add(currentItem);
-    }, onError: _handleStreamError);
+    });
   }
 
-  void _handleStreamError(error, stackTrace) {
-    print('Stream error: $error');
-    _consecutiveErrors++;
-    if (_consecutiveErrors >= _maxConsecutiveErrors) {
-      stop();
+  Future<AudioSource> _createAudioSource(MediaItem item) async {
+    if (item.genre == 'youtube') {
+      try {
+        var manifest = await _youtubeVr.videos.streamsClient.getManifest(item.id);
+        var url = manifest.audioOnly.withHighestBitrate().url;
+        return AudioSource.uri(url, tag: item);
+      } catch (e) {
+        print('VR client failed for ${item.id}, trying Android client...');
+        try {
+          var manifest = await _youtubeAndroid.videos.streamsClient.getManifest(item.id);
+          var url = manifest.audioOnly.withHighestBitrate().url;
+          return AudioSource.uri(url, tag: item);
+        } catch (e) {
+          print('Android client also failed for ${item.id}: $e');
+          throw Exception('Could not get stream URL for ${item.id}');
+        }
+      }
+    } else {
+      return AudioSource.uri(Uri.parse(item.id), tag: item);
+    }
+  }
+
+  @override
+  Future<void> addQueueItem(MediaItem item) async {
+    try {
+      final source = await _createAudioSource(item);
+      await _playlist.add(source);
+      queue.add(List.from(queue.value)..add(item));
+    } catch (e) {
+      print("Error adding queue item: $e");
     }
   }
 
   @override
   Future<void> updateQueue(List<MediaItem> newQueue) async {
-    queue.add(newQueue);
-    await _playlist.clear();
-    _consecutiveErrors = 0;
-
-    for (final item in newQueue) {
-      try {
-        AudioSource source;
-        if (item.genre == 'youtube') {
-          // Try VR first, then Android
-          source = await _getYoutubeSource(item);
-        } else {
-          source = AudioSource.uri(Uri.parse(item.id), tag: item);
-        }
-        await _playlist.add(source);
-      } catch (e) {
-        print('Failed to add ${item.title}: $e');
-        // Optionally add a dummy silent source to keep queue position
-      }
-    }
-  }
-
-  Future<AudioSource> _getYoutubeSource(MediaItem item) async {
     try {
-      final manifest = await _youtubeVr.videos.streamsClient.getManifest(item.id);
-      final audioUrl = manifest.audioOnly.withHighestBitrate().url;
-      return AudioSource.uri(audioUrl, tag: item);
+      final audioSources = await Future.wait(newQueue.map(_createAudioSource));
+      await _playlist.clear();
+      await _playlist.addAll(audioSources);
+      queue.add(newQueue);
     } catch (e) {
-      print('VR client failed, trying Android...');
-      final manifest = await _youtubeAndroid.videos.streamsClient.getManifest(item.id);
-      final audioUrl = manifest.audioOnly.withHighestBitrate().url;
-      return AudioSource.uri(audioUrl, tag: item);
+      print("Error updating queue: $e");
     }
   }
 
   @override
   Future<void> skipToQueueItem(int index) async {
-    if (index < 0 || index >= _playlist.children.length) return;
+    if (index < 0 || index >= _playlist.length) return;
     await _player.seek(Duration.zero, index: index);
-    play();
   }
+
+  @override
+  Future<void> play() => _player.play();
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> seek(Duration position) => _player.seek(position);
 
   @override
   Future<void> skipToNext() => _player.seekToNext();
+
   @override
   Future<void> skipToPrevious() => _player.seekToPrevious();
-  @override
-  Future<void> play() => _player.play();
-  @override
-  Future<void> pause() => _player.pause();
-  @override
-  Future<void> seek(Duration position) => _player.seek(position);
+
   @override
   Future<void> stop() async {
     await _player.stop();
-    await super.stop();
-    _consecutiveErrors = 0;
+    return super.stop();
+  }
+  
+  @override
+  Future<void> onClose() {
+    _player.dispose();
+    _youtubeVr.close();
+    _youtubeAndroid.close();
+    return super.onClose();
   }
 
   PlaybackState _transformEvent(PlaybackEvent event) {
-    final playing = _player.playing;
-    final queueSize = _playlist.children.length;
     return PlaybackState(
       controls: [
-        if (queueSize > 1) MediaControl.skipToPrevious,
-        if (playing) MediaControl.pause else MediaControl.play,
-        if (queueSize > 1) MediaControl.skipToNext,
-        MediaControl.stop,
+        if (_player.hasPrevious) MediaControl.skipToPrevious else MediaControl.play,
+        if (_player.playing) MediaControl.pause else MediaControl.play,
+        if (_player.hasNext) MediaControl.skipToNext else MediaControl.play,
       ],
       systemActions: const {
         MediaAction.seek,
         MediaAction.seekForward,
         MediaAction.seekBackward,
       },
-      androidCompactActionIndices: queueSize > 1 ? [0, 1, 2] : [0, 1],
+      androidCompactActionIndices: const [0, 1, 2],
       processingState: const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
@@ -152,7 +151,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ProcessingState.ready: AudioProcessingState.ready,
         ProcessingState.completed: AudioProcessingState.completed,
       }[_player.processingState]!,
-      playing: playing,
+      playing: _player.playing,
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,

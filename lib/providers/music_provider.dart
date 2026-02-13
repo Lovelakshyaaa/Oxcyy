@@ -4,8 +4,9 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:rxdart/rxdart.dart'; // 🔥 ADD THIS IMPORT
+import 'package:rxdart/rxdart.dart';
 import '../services/audio_handler.dart';
+import '../utils/clients.dart';
 
 class Song {
   final String id;
@@ -31,7 +32,8 @@ class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
 
-  final _yt = yt.YoutubeExplode();
+  // Use a properly configured client for searches, just like the audio handler.
+  final _yt = yt.YoutubeExplode(client: createHttpClient());
 
   List<Song> _localSongs = [];
   List<Song> _shuffledSongs = [];
@@ -39,7 +41,6 @@ class MusicProvider with ChangeNotifier {
   bool _isFetchingLocal = false;
   bool _isPlayerExpanded = false;
   bool _isShuffleEnabled = false;
-  List<Song> _originalQueue = [];
 
   List<Song> get localSongs => _localSongs;
   List<Song> get searchResults => _searchResults;
@@ -58,9 +59,9 @@ class MusicProvider with ChangeNotifier {
       }
       _audioHandler = await initAudioService();
       
-      // 🔥 Throttle mediaItem updates to reduce UI flicker
       _audioHandler!.mediaItem
           .throttleTime(const Duration(milliseconds: 100))
+          .distinct()
           .listen((_) => notifyListeners());
 
       _isInitialized = true;
@@ -96,15 +97,20 @@ class MusicProvider with ChangeNotifier {
                   duration: Duration(milliseconds: item.duration ?? 0),
                 ))
             .toList();
+        
         if (_isShuffleEnabled) {
           _shuffledSongs = List.from(_localSongs)..shuffle();
+          await _updateQueueWithSongs(_shuffledSongs);
+        } else {
+          await _updateQueueWithSongs(_localSongs);
         }
       }
     } catch (e) {
       print("Local Fetch Error: $e");
+    } finally {
+      _isFetchingLocal = false;
+      notifyListeners();
     }
-    _isFetchingLocal = false;
-    notifyListeners();
   }
 
   Future<void> search(String query) async {
@@ -116,20 +122,23 @@ class MusicProvider with ChangeNotifier {
       _searchResults = results.map((video) => Song(
             id: video.id.value,
             title: video.title,
-            artist: video.author,
+            author: video.author,
             thumbUrl: video.thumbnails.highResUrl,
             type: 'youtube',
             duration: video.duration,
           )).toList();
-      notifyListeners();
     } catch (e) {
       print("Search Error: $e");
+      _searchResults = [];
+    } finally {
+      notifyListeners();
     }
   }
 
   Future<void> toggleShuffle() async {
     if (_audioHandler == null) return;
     _isShuffleEnabled = !_isShuffleEnabled;
+    
     if (_isShuffleEnabled) {
       _shuffledSongs = List.from(_localSongs)..shuffle();
       await _updateQueueWithSongs(_shuffledSongs);
@@ -143,6 +152,36 @@ class MusicProvider with ChangeNotifier {
     final handler = _audioHandler as MyAudioHandler;
     final mediaItems = songs.map(_songToMediaItem).toList();
     await handler.updateQueue(mediaItems);
+  }
+  
+  // A clean, simple play method.
+  Future<void> play(Song song) async {
+    if (_audioHandler == null) await init();
+
+    final mediaItem = _songToMediaItem(song);
+
+    // For local songs, they are already in the queue. Just skip to it.
+    if (song.type == 'local') {
+      final queue = _isShuffleEnabled ? _shuffledSongs : _localSongs;
+      final index = queue.indexWhere((s) => s.id == song.id);
+      if (index != -1) {
+        await _audioHandler!.skipToQueueItem(index);
+      }
+    } else {
+      // For YouTube, add it to the queue and play it directly.
+      // The AudioHandler will resolve the stream.
+      await _audioHandler!.addQueueItem(mediaItem);
+      await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
+    }
+    
+    // Always call play to ensure playback starts.
+    _audioHandler!.play();
+
+    // Expand player UI
+    if (!_isPlayerExpanded) {
+      _isPlayerExpanded = true;
+      notifyListeners();
+    }
   }
 
   MediaItem _songToMediaItem(Song s) {
@@ -158,43 +197,6 @@ class MusicProvider with ChangeNotifier {
     );
   }
 
-  Future<void> play(Song song) async {
-    if (_audioHandler == null) await init();
-    final handler = _audioHandler as MyAudioHandler;
-
-    List<Song> songQueue;
-    int initialIndex;
-
-    if (song.type == 'local') {
-      if (_isShuffleEnabled) {
-        songQueue = _shuffledSongs;
-        initialIndex = _shuffledSongs.indexWhere((s) => s.id == song.id);
-        if (initialIndex < 0) {
-          songQueue = _localSongs;
-          initialIndex = _localSongs.indexWhere((s) => s.id == song.id);
-        }
-      } else {
-        songQueue = _localSongs;
-        initialIndex = _localSongs.indexWhere((s) => s.id == song.id);
-      }
-    } else {
-      // YouTube: single song (or you could queue search results later)
-      songQueue = [song];
-      initialIndex = 0;
-    }
-
-    if (initialIndex < 0) return;
-
-    final mediaItems = songQueue.map(_songToMediaItem).toList();
-
-    await handler.updateQueue(mediaItems);
-    await handler.skipToQueueItem(initialIndex);
-
-    // Expand player UI
-    _isPlayerExpanded = true;
-    notifyListeners();
-  }
-
   void togglePlayPause() {
     if (_audioHandler?.playbackState.value.playing == true) {
       _audioHandler!.pause();
@@ -203,8 +205,8 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  void next() => (_audioHandler as QueueHandler?)?.skipToNext();
-  void previous() => (_audioHandler as QueueHandler?)?.skipToPrevious();
+  void next() => _audioHandler?.skipToNext();
+  void previous() => _audioHandler?.skipToPrevious();
   void seek(Duration pos) => _audioHandler?.seek(pos);
 
   void togglePlayerView() {
@@ -213,7 +215,15 @@ class MusicProvider with ChangeNotifier {
   }
 
   void collapsePlayer() {
-    _isPlayerExpanded = false;
-    notifyListeners();
+    if (_isPlayerExpanded) {
+      _isPlayerExpanded = false;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _yt.close();
+    super.dispose();
   }
 }
