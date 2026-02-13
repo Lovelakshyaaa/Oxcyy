@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/screens/home_screen.dart';
+import 'package:oxcy/main.dart'; // Import main.dart to get MainScaffold
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -19,13 +17,13 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigateToHome() async {
-    // The MusicProvider now initializes itself, so we just wait for it to be ready.
-    // A slight delay can ensure that the provider has fetched initial data if needed.
+    // A delay to show the splash screen
     await Future.delayed(const Duration(seconds: 3));
 
     if (mounted) {
+      // Navigate to MainScaffold which contains the BottomNavBar and pages
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => HomeScreen()),
+        MaterialPageRoute(builder: (context) => MainScaffold()),
       );
     }
   }
