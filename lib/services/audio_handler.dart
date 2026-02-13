@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 Future<AudioHandler> initAudioService() async {
@@ -18,100 +18,72 @@ Future<AudioHandler> initAudioService() async {
   );
 }
 
-class MyAudioHandler extends BaseAudioHandler with SeekHandler {
-  final _player = AudioPlayer();
-  final _playlist = ConcatenatingAudioSource(children: []);
-  final _youtube = YoutubeExplode();
+class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
+  final AudioPlayer _player = AudioPlayer();
+  final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
+  final YoutubeExplode _youtube = YoutubeExplode();
 
   MyAudioHandler() {
     _init();
-    _notifyAudioHandlerAboutPlaybackEvents();
-    _listenForCurrentSongIndexChanges();
+    _notifyPlaybackEvents();
+    _listenForCurrentMediaItem();
   }
 
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    try {
-      // Use the playlist as the player's source
-      await _player.setAudioSource(_playlist, preload: false);
-    } catch (e) {
-      print("Error setting audio source: $e");
-    }
-
-    session.interruptionEventStream.listen((event) {
-      if (event.begin) {
-        if (event.type == AudioInterruptionType.duck) {
-          _player.setVolume(0.5);
-        } else {
-          pause();
-        }
-      } else {
-        if (event.type == AudioInterruptionType.duck) {
-          _player.setVolume(1.0);
-        } else {
-          play();
-        }
-      }
-    });
+    await _player.setAudioSource(_playlist, preload: false);
   }
 
-  void _notifyAudioHandlerAboutPlaybackEvents() {
-    _player.playbackEventStream.map(_transformEvent).listen((playbackState) {
-      this.playbackState.add(playbackState);
-    });
+  void _notifyPlaybackEvents() {
+    _player.playbackEventStream.map(_transformEvent).listen(playbackState.add);
   }
 
-  void _listenForCurrentSongIndexChanges() {
+  void _listenForCurrentMediaItem() {
     _player.sequenceStateStream.listen((sequenceState) {
       final currentItem = sequenceState?.currentSource?.tag as MediaItem?;
-      if (currentItem != null) {
-        mediaItem.add(currentItem);
-      }
+      if (currentItem != null) mediaItem.add(currentItem);
     });
+  }
+
+  // ---------- QueueHandler implementation ----------
+  @override
+  Future<void> updateQueue(List<MediaItem> newQueue) async {
+    queue.add(newQueue); // updates the public `queue` stream
+    await _playlist.clear();
+
+    for (final item in newQueue) {
+      try {
+        AudioSource source;
+        if (item.genre == 'youtube') {
+          final manifest = await _youtube.videos.streamsClient.getManifest(item.id);
+          final audioUrl = manifest.audioOnly.withHighestBitrate().url;
+          source = AudioSource.uri(audioUrl, tag: item);
+        } else {
+          // Local file – item.id must be the content:// URI
+          source = AudioSource.uri(Uri.parse(item.id), tag: item);
+        }
+        _playlist.add(source);
+      } catch (e) {
+        print('Failed to add ${item.title}: $e');
+      }
+    }
   }
 
   @override
-  Future<void> playMediaItem(MediaItem item) async {
-    mediaItem.add(item);
-    playbackState.add(playbackState.value.copyWith(
-      processingState: AudioProcessingState.loading,
-    ));
-
-    try {
-      // *** THE FIX FOR STUCK PLAYER ***
-      // Stop the player and clear the playlist before adding a new item.
-      await _player.stop();
-      await _playlist.clear();
-
-      AudioSource source;
-      if (item.genre == 'youtube') {
-        var manifest = await _youtube.videos.streamsClient.getManifest(item.id);
-        var audioUrl = manifest.audioOnly.withHighestBitrate().url;
-        source = AudioSource.uri(audioUrl, tag: item);
-      } else {
-        // For local files, the ID is already the URI string.
-        source = AudioSource.uri(Uri.parse(item.id), tag: item);
-      }
-      
-      await _playlist.add(source);
-      await _player.play();
-
-    } catch (e) {
-      print("Handler Error: $e");
-      String errorMsg = "DEBUG_ERR: $e";
-      await Clipboard.setData(ClipboardData(text: errorMsg));
-      mediaItem.add(item.copyWith(
-        title: "ERR: Playback Failed",
-        artist: "Check logs for details",
-      ));
-      playbackState.add(playbackState.value.copyWith(
-        processingState: AudioProcessingState.error,
-        errorMessage: errorMsg,
-      ));
-    }
+  Future<void> skipToQueueItem(int index) async {
+    if (index < 0 || index >= _playlist.children.length) return;
+    await _player.seek(Duration.zero, index: index);
+    play(); // auto-play after skip
   }
 
+  @override
+  Future<void> skipToNext() => _player.seekToNext();
+
+  @override
+  Future<void> skipToPrevious() => _player.seekToPrevious();
+
+  // ---------- Standard controls ----------
   @override
   Future<void> play() => _player.play();
 
@@ -127,6 +99,7 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     await super.stop();
   }
 
+  // ---------- Transform just_audio events into audio_service playback state ----------
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [
@@ -154,3 +127,4 @@ class MyAudioHandler extends BaseAudioHandler with SeekHandler {
     );
   }
 }
+      
