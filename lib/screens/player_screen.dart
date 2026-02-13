@@ -67,8 +67,6 @@ class SmartPlayer extends StatelessWidget {
   }
 
   Widget _buildArtwork(MediaItem mediaItem, double size, {bool highRes = false}) {
-    // This method is kept for the mini‑player and background blur.
-    // The large artwork now uses _HighResArtwork.
     final isLocal = mediaItem.genre == 'local';
     if (isLocal) {
       final artworkId = mediaItem.extras?['artworkId'] as int?;
@@ -268,7 +266,6 @@ class SmartPlayer extends StatelessWidget {
                             color: Colors.white70, fontSize: 16),
                       ),
                       const SizedBox(height: 10),
-                      // FIXED SLIDER
                       _PositionSlider(mediaItem: mediaItem, handler: handler),
                     ],
                   ),
@@ -379,10 +376,11 @@ class __HighResArtworkState extends State<_HighResArtwork> {
 
     setState(() => _isLoading = true);
     try {
+      // ✅ FIXED: positional arguments id and type, then named parameters
       final artwork = await _audioQuery.queryArtwork(
-        id: artworkId,
-        type: ArtworkType.AUDIO,
-        size: 1024, // request large size
+        artworkId,
+        ArtworkType.AUDIO,
+        size: 1024,   // request large size
         quality: 100,
       );
       if (artwork != null) {
@@ -490,10 +488,9 @@ class __PositionSliderState extends State<_PositionSlider> {
   @override
   void initState() {
     super.initState();
-    // Throttle position updates to reduce rebuilds
     _positionStream = AudioService.position
         .throttleTime(const Duration(milliseconds: 500))
-        .distinct(); // only emit when value changes
+        .distinct();
   }
 
   @override
