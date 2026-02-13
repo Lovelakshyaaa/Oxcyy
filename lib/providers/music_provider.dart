@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
-import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
@@ -16,7 +13,7 @@ class Song {
   final String thumbUrl;
   final String type;
   final int? localId;
-  final Duration? duration; // 🔥 NEW: store duration for slider
+  final Duration? duration;
 
   Song({
     required this.id,
@@ -39,15 +36,14 @@ class MusicProvider with ChangeNotifier {
   List<Song> _searchResults = [];
   bool _isFetchingLocal = false;
   bool _isPlayerExpanded = false;
-  bool _isShuffleEnabled = false; // 🔥 NEW: shuffle mode
-  List<Song> _originalQueue = [];   // 🔥 NEW: for shuffle reset
+  bool _isShuffleEnabled = false;
+  List<Song> _originalQueue = [];
 
   List<Song> get localSongs => _localSongs;
   List<Song> get searchResults => _searchResults;
   bool get isPlayerExpanded => _isPlayerExpanded;
   bool get isFetchingLocal => _isFetchingLocal;
-  bool get isShuffleEnabled => _isShuffleEnabled; // 🔥 NEW getter
-
+  bool get isShuffleEnabled => _isShuffleEnabled;
   bool get isMiniPlayerVisible => _audioHandler?.mediaItem.value != null;
 
   bool _isInitialized = false;
@@ -58,13 +54,8 @@ class MusicProvider with ChangeNotifier {
       if (await Permission.notification.isDenied) {
         await Permission.notification.request();
       }
-
       _audioHandler = await initAudioService();
-
-      _audioHandler!.mediaItem.listen((_) {
-        notifyListeners();
-      });
-
+      _audioHandler!.mediaItem.listen((_) => notifyListeners());
       _isInitialized = true;
       notifyListeners();
       await fetchLocalSongs();
@@ -87,19 +78,17 @@ class MusicProvider with ChangeNotifier {
           ignoreCase: true,
         );
         _localSongs = songs
-            .where((item) =>
-                (item.isMusic == true) && (item.duration ?? 0) > 10000)
-            .map((item) {
-          return Song(
-            id: item.uri!,
-            title: item.title,
-            artist: item.artist ?? "Unknown",
-            thumbUrl: "",
-            type: 'local',
-            localId: item.id,
-            duration: Duration(milliseconds: item.duration ?? 0), // 🔥 NEW
-          );
-        }).toList();
+            .where((item) => (item.isMusic == true) && (item.duration ?? 0) > 10000)
+            .map((item) => Song(
+                  id: item.uri!,
+                  title: item.title,
+                  artist: item.artist ?? "Unknown",
+                  thumbUrl: "",
+                  type: 'local',
+                  localId: item.id,
+                  duration: Duration(milliseconds: item.duration ?? 0),
+                ))
+            .toList();
       }
     } catch (e) {
       print("Local Fetch Error: $e");
@@ -114,42 +103,36 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
     try {
       var results = await _yt.search.getVideos(query);
-      _searchResults = results.map((video) {
-        return Song(
-          id: video.id.value,
-          title: video.title,
-          artist: video.author,
-          thumbUrl: video.thumbnails.highResUrl,
-          type: 'youtube',
-          duration: video.duration, // 🔥 NEW: YouTube duration is nullable
-        );
-      }).toList();
+      _searchResults = results.map((video) => Song(
+            id: video.id.value,
+            title: video.title,
+            artist: video.author,
+            thumbUrl: video.thumbnails.highResUrl,
+            type: 'youtube',
+            duration: video.duration,
+          )).toList();
       notifyListeners();
     } catch (e) {
       print("Search Error: $e");
     }
   }
 
-  // 🔥 NEW: Toggle shuffle mode and update queue
   Future<void> toggleShuffle() async {
     if (_audioHandler == null) return;
     _isShuffleEnabled = !_isShuffleEnabled;
     if (_isShuffleEnabled) {
-      // Store original order before shuffle
       _originalQueue = List.from(_localSongs);
       final shuffled = List<Song>.from(_localSongs)..shuffle();
       await _updateQueueWithSongs(shuffled);
     } else {
-      // Restore original order
       await _updateQueueWithSongs(_originalQueue);
     }
     notifyListeners();
   }
 
-  // 🔥 NEW: Helper to update queue without changing current song
   Future<void> _updateQueueWithSongs(List<Song> songs) async {
     final handler = _audioHandler as MyAudioHandler;
-    final mediaItems = songs.map((s) => _songToMediaItem(s)).toList();
+    final mediaItems = songs.map(_songToMediaItem).toList();
     await handler.updateQueue(mediaItems);
   }
 
@@ -161,7 +144,7 @@ class MusicProvider with ChangeNotifier {
       artist: s.artist,
       artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
       genre: s.type,
-      duration: s.duration, // 🔥 NEW: set duration!
+      duration: s.duration,
       extras: {'artworkId': s.localId},
     );
   }
@@ -172,10 +155,8 @@ class MusicProvider with ChangeNotifier {
 
     List<Song> songQueue;
     if (song.type == 'local') {
-      // Use the currently displayed list (respect shuffle)
       songQueue = _isShuffleEnabled ? _originalQueue : _localSongs;
     } else {
-      // YouTube: single song
       songQueue = [song];
     }
 
@@ -191,7 +172,6 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Delegated controls
   void togglePlayPause() {
     if (_audioHandler?.playbackState.value.playing == true) {
       _audioHandler!.pause();
@@ -204,7 +184,6 @@ class MusicProvider with ChangeNotifier {
   void previous() => (_audioHandler as QueueHandler?)?.skipToPrevious();
   void seek(Duration pos) => _audioHandler?.seek(pos);
 
-  // UI state
   void togglePlayerView() {
     _isPlayerExpanded = !_isPlayerExpanded;
     notifyListeners();
