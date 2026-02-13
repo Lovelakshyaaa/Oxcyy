@@ -3,7 +3,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import '../utils/clients.dart'; // 🔥 import the custom clients
+import '../utils/clients.dart'; // ⚠️ Make sure path is correct
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -23,12 +23,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
   
-  // 🔥 Use custom clients for better YouTube compatibility
+  // Use custom clients for better YouTube compatibility
   late final YoutubeExplode _youtube;
 
   MyAudioHandler() {
-    // Try VR client first, fallback to Android client
-    _youtube = YoutubeExplode(client: customAndroidVr);
+    // ✅ FIXED: Pass custom client as positional argument, not named
+    _youtube = YoutubeExplode(customAndroidVr);
     _init();
     _notifyPlaybackEvents();
     _listenForCurrentMediaItem();
@@ -60,7 +60,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       try {
         AudioSource source;
         if (item.genre == 'youtube') {
-          // 🔥 Use custom client through _youtube instance
           final manifest = await _youtube.videos.streamsClient.getManifest(item.id);
           final audioUrl = manifest.audioOnly.withHighestBitrate().url;
           source = AudioSource.uri(audioUrl, tag: item);
@@ -70,7 +69,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await _playlist.add(source);
       } catch (e) {
         print('Failed to add ${item.title}: $e');
-        // Optionally skip this item and continue
       }
     }
   }
