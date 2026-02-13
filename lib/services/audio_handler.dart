@@ -3,6 +3,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../utils/clients.dart'; // 🔥 import the custom clients
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -21,9 +22,13 @@ Future<AudioHandler> initAudioService() async {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
-  final YoutubeExplode _youtube = YoutubeExplode();
+  
+  // 🔥 Use custom clients for better YouTube compatibility
+  late final YoutubeExplode _youtube;
 
   MyAudioHandler() {
+    // Try VR client first, fallback to Android client
+    _youtube = YoutubeExplode(client: customAndroidVr);
     _init();
     _notifyPlaybackEvents();
     _listenForCurrentMediaItem();
@@ -46,26 +51,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     });
   }
 
-  // ---------- QueueHandler implementation ----------
   @override
   Future<void> updateQueue(List<MediaItem> newQueue) async {
-    queue.add(newQueue); // updates the public `queue` stream
+    queue.add(newQueue);
     await _playlist.clear();
 
     for (final item in newQueue) {
       try {
         AudioSource source;
         if (item.genre == 'youtube') {
+          // 🔥 Use custom client through _youtube instance
           final manifest = await _youtube.videos.streamsClient.getManifest(item.id);
           final audioUrl = manifest.audioOnly.withHighestBitrate().url;
           source = AudioSource.uri(audioUrl, tag: item);
         } else {
-          // Local file – item.id must be the content:// URI
           source = AudioSource.uri(Uri.parse(item.id), tag: item);
         }
-        _playlist.add(source);
+        await _playlist.add(source);
       } catch (e) {
         print('Failed to add ${item.title}: $e');
+        // Optionally skip this item and continue
       }
     }
   }
@@ -74,32 +79,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> skipToQueueItem(int index) async {
     if (index < 0 || index >= _playlist.children.length) return;
     await _player.seek(Duration.zero, index: index);
-    play(); // auto-play after skip
+    play();
   }
 
   @override
   Future<void> skipToNext() => _player.seekToNext();
-
   @override
   Future<void> skipToPrevious() => _player.seekToPrevious();
 
-  // ---------- Standard controls ----------
   @override
   Future<void> play() => _player.play();
-
   @override
   Future<void> pause() => _player.pause();
-
   @override
   Future<void> seek(Duration position) => _player.seek(position);
-
   @override
   Future<void> stop() async {
     await _player.stop();
     await super.stop();
   }
 
-  // ---------- Transform just_audio events into audio_service playback state ----------
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [
@@ -127,4 +126,3 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
   }
 }
-      
