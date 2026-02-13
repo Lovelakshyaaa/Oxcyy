@@ -48,7 +48,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   
   final List<Widget> _pages = [
     const LocalMusicScreen(), 
-    const HomeScreen(),       
+    HomeScreen(),       
   ];
 
   @override
