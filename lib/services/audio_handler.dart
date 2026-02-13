@@ -120,17 +120,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> stop() async {
     await _player.stop();
-    return super.stop();
-  }
-  
-  @override
-  Future<void> onClose() {
     _player.dispose();
     _youtubeVr.close();
     _youtubeAndroid.close();
-    return super.onClose();
+    return super.stop();
   }
-
+  
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [

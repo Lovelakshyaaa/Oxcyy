@@ -32,8 +32,8 @@ class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
 
-  // Use a properly configured client for searches, just like the audio handler.
-  final _yt = yt.YoutubeExplode(client: createHttpClient());
+  // ✅ FIX: Use the correct constructor and a valid client factory.
+  final _yt = yt.YoutubeExplode(createAndroidClient());
 
   List<Song> _localSongs = [];
   List<Song> _shuffledSongs = [];
@@ -122,7 +122,8 @@ class MusicProvider with ChangeNotifier {
       _searchResults = results.map((video) => Song(
             id: video.id.value,
             title: video.title,
-            author: video.author,
+            // ✅ FIX: Use 'artist' instead of 'author'.
+            artist: video.author,
             thumbUrl: video.thumbnails.highResUrl,
             type: 'youtube',
             duration: video.duration,
@@ -154,13 +155,11 @@ class MusicProvider with ChangeNotifier {
     await handler.updateQueue(mediaItems);
   }
   
-  // A clean, simple play method.
   Future<void> play(Song song) async {
     if (_audioHandler == null) await init();
 
     final mediaItem = _songToMediaItem(song);
 
-    // For local songs, they are already in the queue. Just skip to it.
     if (song.type == 'local') {
       final queue = _isShuffleEnabled ? _shuffledSongs : _localSongs;
       final index = queue.indexWhere((s) => s.id == song.id);
@@ -168,16 +167,12 @@ class MusicProvider with ChangeNotifier {
         await _audioHandler!.skipToQueueItem(index);
       }
     } else {
-      // For YouTube, add it to the queue and play it directly.
-      // The AudioHandler will resolve the stream.
       await _audioHandler!.addQueueItem(mediaItem);
       await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
     }
     
-    // Always call play to ensure playback starts.
     _audioHandler!.play();
 
-    // Expand player UI
     if (!_isPlayerExpanded) {
       _isPlayerExpanded = true;
       notifyListeners();
