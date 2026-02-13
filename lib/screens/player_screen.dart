@@ -90,6 +90,7 @@ class SmartPlayer extends StatelessWidget {
       );
     } else {
       return CachedNetworkImage(
+        key: ValueKey(mediaItem.artUri),
         imageUrl: mediaItem.artUri.toString(),
         width: size,
         height: size,
