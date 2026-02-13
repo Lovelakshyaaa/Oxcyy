@@ -16,29 +16,86 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       # ---------------------------------------------------
-      # 🛡️ THE MONOLITH GENERATION (Namespace + JVM + ProGuard)
+      # FORCE CACHE BUST – include run ID in cache key
+      # ---------------------------------------------------
+      - name: 🔄 Cache Gradle & Pub with unique key
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.pub-cache
+          key: ${{ runner.os }}-build-${{ hashFiles('**/pubspec.yaml', '**/*.gradle*') }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ hashFiles('**/pubspec.yaml', '**/*.gradle*') }}-
+
+      # ---------------------------------------------------
+      # 🛡️ RECONSTRUCT ANDROID PROJECT WITH FULL PROGUARD
       # ---------------------------------------------------
       - name: 🏗️ Reconstructing Android Project
         run: |
           flutter config --no-analytics
           flutter create --platforms=android .
-          
+
           # 1. Clean old files
           rm -f android/settings.gradle android/build.gradle android/app/build.gradle
           rm -f android/gradle/wrapper/gradle-wrapper.properties
 
-          # ⚠️ 1.5 INJECT PROGUARD RULES (The "Anti-Blink" Fix)
-          # This tells the compiler: "DO NOT DELETE THE AUDIO ENGINE"
-          echo '-keep class com.ryanheise.** { *; }
-          -keep class com.google.android.exoplayer2.** { *; }
-          -keep class androidx.media.** { *; }
-          -keep class android.support.v4.media.** { *; }
-          -dontwarn com.ryanheise.**' > android/app/proguard-rules.pro
+          # 2. Write FULL ProGuard rules (from your existing file)
+          cat > android/app/proguard-rules.pro << 'EOF'
+          # =========================================================
+          # FLUTTER WRAPPERS
+          # =========================================================
+          -keep class io.flutter.app.** { *; }
+          -keep class io.flutter.plugin.** { *; }
+          -keep class io.flutter.util.** { *; }
+          -keep class io.flutter.view.** { *; }
+          -keep class io.flutter.** { *; }
+          -keep class io.flutter.plugins.** { *; }
 
-          # 2. SETTINGS.GRADLE
-          echo 'pluginManagement {
+          # =========================================================
+          # AUDIO ENGINE (JustAudio + AudioService + ExoPlayer)
+          # =========================================================
+          -keep class com.ryanheise.just_audio.** { *; }
+          -keep class com.ryanheise.audio_session.** { *; }
+          -keep class com.ryanheise.just_audio_background.** { *; }
+          -keep class com.ryanheise.audioservice.** { *; }
+
+          # ⚠️ THE FIX: PREVENT SILENT CRASHES IN RELEASE ⚠️
+          -keep class com.google.android.exoplayer2.** { *; }
+          -keep class androidx.media3.** { *; }
+          -keepattributes Signature
+          -keepattributes *Annotation*
+          -keepattributes EnclosingMethod
+
+          # =========================================================
+          # LOCAL MUSIC & STORAGE
+          # =========================================================
+          -keep class com.lucasjosino.on_audio_query.** { *; }
+
+          # =========================================================
+          # ANDROID MEDIA UTILS
+          # =========================================================
+          -keep class android.support.v4.media.** { *; }
+          -keep class androidx.media.** { *; }
+
+          # =========================================================
+          # PREVENT R8 STRIPPING GENERATED PLUGINS
+          # =========================================================
+          -keep class io.flutter.plugins.GeneratedPluginRegistrant { *; }
+
+          # =========================================================
+          # IGNORE HARMLESS WARNINGS
+          # =========================================================
+          -dontwarn com.google.android.play.core.**
+          -dontwarn io.flutter.embedding.engine.deferredcomponents.**
+          EOF
+
+          # 3. SETTINGS.GRADLE
+          cat > android/settings.gradle << 'EOF'
+          pluginManagement {
               def flutterSdkPath = {
                   def properties = new Properties()
                   file("local.properties").withInputStream { properties.load(it) }
@@ -52,17 +109,19 @@ jobs:
               id "com.android.application" version "8.3.2" apply false
               id "org.jetbrains.kotlin.android" version "1.9.23" apply false
           }
-          include ":app"' > android/settings.gradle
+          include ":app"
+          EOF
 
-          # 3. ROOT BUILD.GRADLE
-          echo 'allprojects {
+          # 4. ROOT BUILD.GRADLE
+          cat > android/build.gradle << 'EOF'
+          allprojects {
               repositories { google(); mavenCentral() }
           }
           rootProject.buildDir = "../build"
           subprojects {
               project.buildDir = "${rootProject.buildDir}/${project.name}"
               
-              // ⚠️ THE ON_AUDIO_QUERY FIX: Inject Namespace if missing
+              // Inject namespace if missing (fix for on_audio_query)
               afterEvaluate { project ->
                   if (project.hasProperty("android")) {
                       project.android {
@@ -74,17 +133,18 @@ jobs:
                               targetCompatibility = JavaVersion.VERSION_17
                           }
                       }
-                      // Force Kotlin to 17 for the library
                       tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
                           kotlinOptions { jvmTarget = "17" }
                       }
                   }
               }
           }
-          tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
+          tasks.register("clean", Delete) { delete rootProject.buildDir }
+          EOF
 
-          # 4. APP/BUILD.GRADLE
-          echo 'plugins {
+          # 5. APP/BUILD.GRADLE
+          cat > android/app/build.gradle << 'EOF'
+          plugins {
               id "com.android.application"
               id "org.jetbrains.kotlin.android"
               id "dev.flutter.flutter-gradle-plugin"
@@ -107,22 +167,24 @@ jobs:
                   release {
                       signingConfig signingConfigs.debug
                       minifyEnabled true
-                      // ⚠️ LINKING THE RULES WE CREATED ABOVE
                       proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
                   }
               }
           }
           dependencies {
               implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.23"
-          }' > android/app/build.gradle
+          }
+          EOF
 
-          # 5. GRADLE WRAPPER & PROPERTIES
+          # 6. GRADLE WRAPPER & PROPERTIES
           mkdir -p android/gradle/wrapper
           echo 'distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-all.zip' > android/gradle/wrapper/gradle-wrapper.properties
-          echo 'org.gradle.jvmargs=-Xmx4G
+          cat > android/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4G
           android.useAndroidX=true
           android.enableJetifier=true
-          kotlin.jvm.target.validation.mode=ignore' > android/gradle.properties
+          kotlin.jvm.target.validation.mode=ignore
+          EOF
 
       - name: ☢️ FINAL CLEAN & BUILD
         run: |
