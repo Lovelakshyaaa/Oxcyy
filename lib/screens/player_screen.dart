@@ -125,25 +125,52 @@ class SmartPlayer extends StatelessWidget {
     );
   }
 
+  // ==================== FIXED: Nested Scaffold removed ====================
   Widget _buildFullScreen(BuildContext context, MusicProvider uiProvider, AudioHandler handler, MediaItem mediaItem, bool playing, AudioProcessingState processingState) {
     final bool isLoading = processingState == AudioProcessingState.loading || processingState == AudioProcessingState.buffering;
-    final QueueHandler queueHandler = handler as QueueHandler;
+    final queueHandler = handler as QueueHandler;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      child: Stack(
         children: [
-          Positioned.fill(child: _buildArtwork(mediaItem, double.infinity, highRes: true)),
-          Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
+          // Background artwork
+          Positioned.fill(
+            child: _buildArtwork(mediaItem, double.infinity, highRes: true),
+          ),
+          // Blur overlay
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+              child: Container(color: Colors.black.withOpacity(0.6)),
+            ),
+          ),
+          // Main content (SafeArea + Column)
           SafeArea(
             child: Column(
               children: [
-                Align(alignment: Alignment.centerLeft, child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: uiProvider.collapsePlayer)),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30),
+                    onPressed: uiProvider.collapsePlayer,
+                  ),
+                ),
                 const Spacer(),
                 Container(
-                  width: 300, height: 300,
-                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))]),
-                  child: ClipRRect(borderRadius: BorderRadius.circular(20), child: _buildArtwork(mediaItem, 300, highRes: true)),
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: _buildArtwork(mediaItem, 300, highRes: true),
+                  ),
                 ),
                 const SizedBox(height: 40),
                 GlassmorphicContainer(
@@ -153,36 +180,67 @@ class SmartPlayer extends StatelessWidget {
                   blur: 15,
                   alignment: Alignment.center,
                   border: 1,
-                  linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
-                  borderGradient: LinearGradient(colors: [Colors.white.withOpacity(0.2), Colors.white.withOpacity(0.1)]),
+                  linearGradient: LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.1),
+                      Colors.white.withOpacity(0.05)
+                    ],
+                  ),
+                  borderGradient: LinearGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.2),
+                      Colors.white.withOpacity(0.1)
+                    ],
+                  ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(mediaItem.title, textAlign: TextAlign.center, maxLines: 1, style: GoogleFonts.poppins(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                      Text(mediaItem.artist ?? '', maxLines: 1, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 16)),
+                      Text(
+                        mediaItem.title,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        mediaItem.artist ?? '',
+                        maxLines: 1,
+                        style: GoogleFonts.poppins(
+                            color: Colors.white70, fontSize: 16),
+                      ),
                       const SizedBox(height: 10),
                       StreamBuilder<Duration>(
                         stream: AudioService.position,
                         builder: (context, snapshot) {
                           final position = snapshot.data ?? Duration.zero;
-                          // *** THE FIX: Get duration from the real MediaItem ***
                           final duration = mediaItem.duration ?? Duration.zero;
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Row(
                               children: [
-                                Text(_formatDuration(position), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                Text(_formatDuration(position),
+                                    style: const TextStyle(
+                                        color: Colors.white54, fontSize: 12)),
                                 Expanded(
                                   child: Slider(
-                                    // *** THE FIX: Clamp with a valid double. ***
-                                    value: position.inMilliseconds.toDouble().clamp(0.0, duration.inMilliseconds.toDouble()),
-                                    max: duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1.0,
+                                    value: position.inMilliseconds
+                                        .toDouble()
+                                        .clamp(0.0,
+                                            duration.inMilliseconds.toDouble()),
+                                    max: duration.inMilliseconds > 0
+                                        ? duration.inMilliseconds.toDouble()
+                                        : 1.0,
                                     activeColor: Colors.purpleAccent,
                                     inactiveColor: Colors.white10,
-                                    onChanged: (val) => handler.seek(Duration(milliseconds: val.toInt())),
+                                    onChanged: (val) => handler
+                                        .seek(Duration(milliseconds: val.toInt())),
                                   ),
                                 ),
-                                Text(_formatDuration(duration), style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                Text(_formatDuration(duration),
+                                    style: const TextStyle(
+                                        color: Colors.white54, fontSize: 12)),
                               ],
                             ),
                           );
@@ -195,21 +253,46 @@ class SmartPlayer extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    IconButton(icon: const Icon(Icons.skip_previous_rounded, color: Colors.white, size: 45), onPressed: queueHandler.skipToPrevious),
+                    IconButton(
+                      icon: const Icon(Icons.skip_previous_rounded,
+                          color: Colors.white, size: 45),
+                      onPressed: queueHandler.skipToPrevious,
+                    ),
                     const SizedBox(width: 20),
                     Container(
-                      decoration: BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.purple.withOpacity(0.4), blurRadius: 15)]),
+                      decoration: BoxDecoration(
+                        color: Colors.purpleAccent,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.purple.withOpacity(0.4),
+                              blurRadius: 15)
+                        ],
+                      ),
                       padding: const EdgeInsets.all(5),
                       child: IconButton(
                         iconSize: 50,
                         icon: isLoading
-                            ? const SizedBox(width: 30, height: 30, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                            : Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, color: Colors.white),
-                        onPressed: () => playing ? handler.pause() : handler.play(),
+                            ? const SizedBox(
+                                width: 30,
+                                height: 30,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 3))
+                            : Icon(
+                                playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                                color: Colors.white),
+                        onPressed: () =>
+                            playing ? handler.pause() : handler.play(),
                       ),
                     ),
                     const SizedBox(width: 20),
-                    IconButton(icon: const Icon(Icons.skip_next_rounded, color: Colors.white, size: 45), onPressed: queueHandler.skipToNext),
+                    IconButton(
+                      icon: const Icon(Icons.skip_next_rounded,
+                          color: Colors.white, size: 45),
+                      onPressed: queueHandler.skipToNext,
+                    ),
                   ],
                 ),
                 const Spacer(),
