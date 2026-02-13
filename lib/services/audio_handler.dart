@@ -23,10 +23,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
   
-  late final YoutubeExplode _youtube;
+  // Create multiple clients for fallback
+  late final YoutubeExplode _youtubeVr;
+  late final YoutubeExplode _youtubeAndroid;
 
   MyAudioHandler() {
-    _youtube = YoutubeExplode(createAndroidVrClient());
+    _youtubeVr = YoutubeExplode(createAndroidVrClient());
+    _youtubeAndroid = YoutubeExplode(createAndroidClient());
     _init();
     _notifyPlaybackEvents();
     _listenForCurrentMediaItem();
@@ -58,31 +61,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       try {
         AudioSource source;
         if (item.genre == 'youtube') {
-          // Try VR client first, fallback to Android client
+          // Try VR client first
           try {
-            final manifest = await _youtube.videos.streamsClient.getManifest(item.id);
+            final manifest = await _youtubeVr.videos.streamsClient.getManifest(item.id);
             final audioUrl = manifest.audioOnly.withHighestBitrate().url;
             source = AudioSource.uri(audioUrl, tag: item);
           } catch (e) {
             print('VR client failed, trying Android client...');
             // Fallback to Android client
-            final fallbackYoutube = YoutubeExplode(createAndroidClient());
-            final manifest = await fallbackYoutube.videos.streamsClient.getManifest(item.id);
+            final manifest = await _youtubeAndroid.videos.streamsClient.getManifest(item.id);
             final audioUrl = manifest.audioOnly.withHighestBitrate().url;
             source = AudioSource.uri(audioUrl, tag: item);
           }
         } else {
+          // Local file
           source = AudioSource.uri(Uri.parse(item.id), tag: item);
         }
         await _playlist.add(source);
       } catch (e) {
         print('Failed to add ${item.title}: $e');
-        // Create a dummy source that shows error (optional)
-        final errorItem = item.copyWith(
-          title: '⚠️ ${item.title}',
-          artist: 'Playback failed',
-        );
-        // We could add a silent audio source or just skip
+        // Optionally create a dummy source that shows error
       }
     }
   }
@@ -126,7 +124,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         MediaAction.seekForward,
         MediaAction.seekBackward,
       },
-      androidCompactActionIndices: queueSize > 1 ? [0, 1, 2] : [0, 1], // prev, play/pause, next
+      androidCompactActionIndices: queueSize > 1 ? [0, 1, 2] : [0, 1],
       processingState: const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
