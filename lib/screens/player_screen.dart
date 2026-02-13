@@ -77,11 +77,11 @@ class SmartPlayer extends StatelessWidget {
       return QueryArtworkWidget(
         id: artworkId,
         type: ArtworkType.AUDIO,
-        keepOldArtwork: true,
+        keepOldArtwork: false,
         quality: 100,
         artworkQuality: FilterQuality.high,
-        artworkHeight: size,   // ✅ now double
-        artworkWidth: size,    // ✅ now double
+        artworkHeight: size * 1.5,   // ✅ now double
+        artworkWidth: size * 1.5,    // ✅ now double
         nullArtworkWidget: Container(
           color: Colors.grey[900],
           child: Icon(Icons.music_note, color: Colors.white, size: size * 0.5),
