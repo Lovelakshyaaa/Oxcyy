@@ -102,7 +102,8 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
                           child: QueryArtworkWidget(
                             id: song.id,
                             type: ArtworkType.AUDIO,
-                            keepOldArtwork: true, 
+                            keepOldArtwork: false,
+                            quality: 100,
                             nullArtworkWidget: Container(
                               color: Colors.white10,
                               child: Icon(Icons.music_note, color: Colors.white),
