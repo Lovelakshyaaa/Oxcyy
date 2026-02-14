@@ -61,6 +61,10 @@ class MusicProvider with ChangeNotifier {
   bool _isShuffleEnabled = false;
   bool get isShuffleEnabled => _isShuffleEnabled;
 
+  // FIX: Add local state for optimistic UI updates
+  AudioServiceRepeatMode _repeatMode = AudioServiceRepeatMode.none;
+  AudioServiceRepeatMode get repeatMode => _repeatMode;
+
   MusicProvider() {
     _init();
   }
@@ -74,6 +78,13 @@ class MusicProvider with ChangeNotifier {
         androidNotificationOngoing: true,
       ),
     );
+    // Listen to the audio handler's repeat mode changes
+    _audioHandler?.playbackState.listen((playbackState) {
+      if (_repeatMode != playbackState.repeatMode) {
+        _repeatMode = playbackState.repeatMode;
+        notifyListeners();
+      }
+    });
     fetchLocalMusic();
   }
 
@@ -154,13 +165,12 @@ class MusicProvider with ChangeNotifier {
         .toList();
   }
 
-  // FIX: Fetch original quality artwork
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
     return await _audioQuery.queryArtwork(
-      id, 
-      type, 
+      id,
+      type,
       format: ArtworkFormat.PNG,
-      size: 2048, // Request original quality
+      size: 2048,
     );
   }
 
@@ -273,15 +283,20 @@ class MusicProvider with ChangeNotifier {
   void previous() => _audioHandler?.skipToPrevious();
   void seek(Duration pos) => _audioHandler?.seek(pos);
 
+  // FIX: Implement optimistic UI for repeat button
   void cycleRepeatMode() {
     if (_audioHandler == null) return;
-    final currentMode = _audioHandler!.playbackState.value.repeatMode;
     final nextMode = {
       AudioServiceRepeatMode.none: AudioServiceRepeatMode.all,
       AudioServiceRepeatMode.all: AudioServiceRepeatMode.one,
       AudioServiceRepeatMode.one: AudioServiceRepeatMode.none,
-    }[currentMode];
-    _audioHandler!.setRepeatMode(nextMode!);
+    }[_repeatMode];
+
+    if (nextMode != null) {
+      _repeatMode = nextMode;
+      notifyListeners(); // Update UI instantly
+      _audioHandler!.setRepeatMode(nextMode); // Send command to player
+    }
   }
 
   void toggleShuffle() {

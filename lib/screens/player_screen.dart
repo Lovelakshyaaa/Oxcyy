@@ -173,6 +173,7 @@ class _Artwork extends StatelessWidget {
         height: size,
         fit: BoxFit.cover,
         fadeInDuration: const Duration(milliseconds: 300),
+        placeholder: (context, url) => _defaultArtwork(size: size),
         errorWidget: (_, __, ___) => _defaultArtwork(size: size),
       );
     }
@@ -195,7 +196,8 @@ class _Artwork extends StatelessWidget {
   Widget _defaultArtwork({double? size}) => Container(width: size, height: size, color: Colors.grey[900], child: const Icon(Icons.music_note, color: Colors.white));
 }
 
-class _HighResArtwork extends StatelessWidget {
+// FIX: Convert to StatefulWidget to prevent flicker
+class _HighResArtwork extends StatefulWidget {
   final MediaItem mediaItem;
   final double? size;
   final bool isBackground;
@@ -203,41 +205,62 @@ class _HighResArtwork extends StatelessWidget {
   const _HighResArtwork({Key? key, required this.mediaItem, this.size, this.isBackground = false}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    final provider = context.read<MusicProvider>();
-    final albumId = mediaItem.extras?['albumId'] as int?;
+  __HighResArtworkState createState() => __HighResArtworkState();
+}
 
-    if (albumId == null) {
-      return _defaultArtwork(size: size);
+class __HighResArtworkState extends State<_HighResArtwork> {
+  Uint8List? _artworkData;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchArtwork();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HighResArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.mediaItem.id != oldWidget.mediaItem.id) {
+      _fetchArtwork();
     }
+  }
 
-    return FutureBuilder<Uint8List?>(
-      future: provider.getArtwork(albumId, ArtworkType.ALBUM),
-      builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data != null) {
-          final image = MemoryImage(snapshot.data!)
-          ;
-          if (isBackground) {
-            return Image(image: image, fit: BoxFit.cover, width: double.infinity, height: double.infinity);
-          }
-          return Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))],
-              image: DecorationImage(image: image, fit: BoxFit.cover),
-            ),
-          );
-        }
-        return _defaultArtwork(size: size);
-      },
-    );
+  Future<void> _fetchArtwork() async {
+    final provider = context.read<MusicProvider>();
+    final albumId = widget.mediaItem.extras?['albumId'] as int?;
+    if (albumId == null) {
+      if (mounted) setState(() => _artworkData = null);
+      return;
+    }
+    final data = await provider.getArtwork(albumId, ArtworkType.ALBUM);
+    if (mounted) {
+      setState(() => _artworkData = data);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_artworkData != null) {
+      final image = MemoryImage(_artworkData!);
+      if (widget.isBackground) {
+        return Image(image: image, fit: BoxFit.cover, width: double.infinity, height: double.infinity);
+      }
+      return Container(
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))],
+          image: DecorationImage(image: image, fit: BoxFit.cover),
+        ),
+      );
+    }
+    // Show placeholder only if there's no artwork yet
+    return _defaultArtwork(size: widget.size);
   }
 
   Widget _defaultArtwork({double? size}) => Container(width: size, height: size, color: Colors.grey[900], child: const Icon(Icons.album, color: Colors.white, size: 50));
 }
-
 
 class _SongInfoCard extends StatelessWidget {
   final MediaItem mediaItem;
@@ -323,7 +346,9 @@ class _FullPlayerControls extends StatelessWidget {
         final playing = state?.playing ?? false;
         final processingState = state?.processingState ?? AudioProcessingState.idle;
         final isLoading = processingState == AudioProcessingState.loading || processingState == AudioProcessingState.buffering;
-        final repeatMode = state?.repeatMode ?? AudioServiceRepeatMode.none;
+        
+        // FIX: Use optimistic repeatMode from provider for instant UI feedback
+        final repeatMode = musicProvider.repeatMode;
         final isShuffleEnabled = musicProvider.isShuffleEnabled;
 
         return Row(
