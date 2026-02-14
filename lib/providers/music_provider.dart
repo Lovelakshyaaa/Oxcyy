@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data'; // <-- FIX: Import for Uint8List
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -127,12 +127,19 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<Song>> getLocalSongsByAlbum(int albumId) async {
+    // FIX: Removed the failing sortType and will sort manually.
     List<SongModel> albumSongs = await _audioQuery.queryAudiosFrom(
       AudiosFromType.ALBUM_ID,
       albumId,
-      sortType: SongSortType.TRACK_NO, // Correct sort type
       orderType: OrderType.ASC_OR_SMALLER,
     );
+
+    // FIX: Sort songs by track number manually to avoid build errors.
+    albumSongs.sort((a, b) {
+      int trackA = int.tryParse(a.track ?? '0') ?? 0;
+      int trackB = int.tryParse(b.track ?? '0') ?? 0;
+      return trackA.compareTo(trackB);
+    });
 
     return albumSongs
         .where((s) => (s.isMusic ?? false) && (s.duration ?? 0) > 10000)
@@ -149,7 +156,6 @@ class MusicProvider with ChangeNotifier {
         .toList();
   }
 
-  // FIX: Correct return type for artwork
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
     return await _audioQuery.queryArtwork(id, type, size: 1000);
   }
@@ -193,7 +199,7 @@ class MusicProvider with ChangeNotifier {
       final mediaItem = _songToMediaItem(song).copyWith(extras: {
         ...song.type == 'youtube' ? {'url': streamUrl} : {},
         'artworkId': song.localId,
-        'albumId': song.albumId, // Ensure albumId is passed to mediaItem
+        'albumId': song.albumId,
       });
 
       List<Song> queueToPlay;
