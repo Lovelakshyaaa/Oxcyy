@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data'; // <-- FIX: Import for Uint8List
 import 'package:flutter/material.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -14,7 +15,7 @@ class Song {
   final String thumbUrl;
   final String type;
   final int? localId;
-  final int? albumId; // Keep track of album ID
+  final int? albumId;
   final Duration? duration;
 
   Song({
@@ -24,7 +25,7 @@ class Song {
     required this.thumbUrl,
     required this.type,
     this.localId,
-    this.albumId, 
+    this.albumId,
     this.duration,
   });
 }
@@ -45,7 +46,7 @@ class MusicProvider with ChangeNotifier {
 
   List<Song> _localSongs = [];
   List<Song> get localSongs => _localSongs;
-  
+
   List<Song> _shuffledSongs = [];
 
   bool _isSearching = false;
@@ -53,7 +54,7 @@ class MusicProvider with ChangeNotifier {
 
   bool _isFetchingLocal = true;
   bool get isFetchingLocal => _isFetchingLocal;
-  
+
   bool _isPlayerExpanded = false;
   bool get isPlayerExpanded => _isPlayerExpanded;
 
@@ -110,7 +111,7 @@ class MusicProvider with ChangeNotifier {
                   duration: Duration(milliseconds: s.duration ?? 0),
                 ))
             .toList();
-            
+
         _shuffledSongs = List.from(_localSongs)..shuffle();
 
         if (_audioHandler != null) {
@@ -125,12 +126,11 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // FIX: Correctly query songs for a specific album
   Future<List<Song>> getLocalSongsByAlbum(int albumId) async {
     List<SongModel> albumSongs = await _audioQuery.queryAudiosFrom(
       AudiosFromType.ALBUM_ID,
       albumId,
-      sortType: SongSortType.TRACK,
+      sortType: SongSortType.TRACK_NO, // Correct sort type
       orderType: OrderType.ASC_OR_SMALLER,
     );
 
@@ -149,10 +149,9 @@ class MusicProvider with ChangeNotifier {
         .toList();
   }
 
-  // FIX: Get high-resolution artwork for the player
-  Future<ArtworkModel?> getArtwork(int id, ArtworkType type) async {
-    final artwork = await _audioQuery.queryArtwork(id, type, size: 1000);
-    return artwork;
+  // FIX: Correct return type for artwork
+  Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
+    return await _audioQuery.queryArtwork(id, type, size: 1000);
   }
 
   Future<void> search(String query) async {
@@ -194,6 +193,7 @@ class MusicProvider with ChangeNotifier {
       final mediaItem = _songToMediaItem(song).copyWith(extras: {
         ...song.type == 'youtube' ? {'url': streamUrl} : {},
         'artworkId': song.localId,
+        'albumId': song.albumId, // Ensure albumId is passed to mediaItem
       });
 
       List<Song> queueToPlay;
@@ -213,7 +213,7 @@ class MusicProvider with ChangeNotifier {
         }
         return;
       }
-      
+
       final index = queueToPlay.indexWhere((s) => s.id == song.id);
       if (index != -1) {
         await _audioHandler!.skipToQueueItem(index);
@@ -221,7 +221,7 @@ class MusicProvider with ChangeNotifier {
         await _audioHandler!.addQueueItem(mediaItem);
         await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
       }
-      
+
       _audioHandler!.play();
 
       if (!_isPlayerExpanded) {
@@ -232,7 +232,7 @@ class MusicProvider with ChangeNotifier {
       print("Error playing song: $e");
     }
   }
-  
+
   Future<void> _updateQueueWithSongs(List<Song> songs) async {
     final mediaItems = songs.map((s) => _songToMediaItem(s)).toList();
     await _audioHandler!.updateQueue(mediaItems);
@@ -262,7 +262,7 @@ class MusicProvider with ChangeNotifier {
   void next() => _audioHandler?.skipToNext();
   void previous() => _audioHandler?.skipToPrevious();
   void seek(Duration pos) => _audioHandler?.seek(pos);
-  
+
   void cycleRepeatMode() {
     if (_audioHandler == null) return;
     final currentMode = _audioHandler!.playbackState.value.repeatMode;
@@ -279,14 +279,14 @@ class MusicProvider with ChangeNotifier {
     _isShuffleEnabled = !_isShuffleEnabled;
     final newMode = _isShuffleEnabled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none;
     _audioHandler!.setShuffleMode(newMode);
-    
+
     if (_isShuffleEnabled) {
       _shuffledSongs = List.from(_localSongs)..shuffle();
       _updateQueueWithSongs(_shuffledSongs);
     } else {
-       _updateQueueWithSongs(_localSongs);
+      _updateQueueWithSongs(_localSongs);
     }
-    
+
     notifyListeners();
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -124,7 +125,7 @@ class FullPlayerView extends StatelessWidget {
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 750),
             transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-            child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: double.infinity, isBackground: true),
+            child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, isBackground: true),
           ),
         ),
         Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
@@ -172,61 +173,69 @@ class _Artwork extends StatelessWidget {
         height: size,
         fit: BoxFit.cover,
         fadeInDuration: const Duration(milliseconds: 300),
-        errorWidget: (_, __, ___) => _defaultArtwork(),
+        errorWidget: (_, __, ___) => _defaultArtwork(size: size),
       );
     }
+    
+    final artworkId = mediaItem.extras?['artworkId'] as int?;
+    if (artworkId == null) return _defaultArtwork(size: size);
+
     return QueryArtworkWidget(
-      id: mediaItem.extras!['artworkId'] as int,
+      id: artworkId,
       type: ArtworkType.AUDIO,
       keepOldArtwork: true,
       artworkQuality: FilterQuality.high,
-      nullArtworkWidget: _defaultArtwork(),
-    );
-  }
-
-  Widget _defaultArtwork() => Container(color: Colors.grey[900], child: const Icon(Icons.music_note, color: Colors.white));
-}
-
-class _HighResArtwork extends StatelessWidget {
-  final MediaItem mediaItem;
-  final double size;
-  final bool isBackground;
-
-  const _HighResArtwork({Key? key, required this.mediaItem, required this.size, this.isBackground = false}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.read<MusicProvider>();
-    final artworkId = mediaItem.extras?['albumId'] ?? mediaItem.extras?['artworkId'];
-
-    if (artworkId == null) {
-      return _defaultArtwork();
-    }
-
-    return FutureBuilder<ArtworkModel?>(
-      future: provider.getArtwork(artworkId, isBackground ? ArtworkType.ALBUM : ArtworkType.AUDIO),
-      builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data!.artwork != null) {
-          final image = MemoryImage(snapshot.data!.artwork!)
-          ;
-          return isBackground
-              ? Image(image: image, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
-              : Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))],
-                    image: DecorationImage(image: image, fit: BoxFit.cover),
-                  ),
-                );
-        }
-        return isBackground ? const SizedBox.shrink() : _defaultArtwork(size: size);
-      },
+      artworkHeight: size,
+      artworkWidth: size,
+      artworkFit: BoxFit.cover,
+      nullArtworkWidget: _defaultArtwork(size: size),
     );
   }
 
   Widget _defaultArtwork({double? size}) => Container(width: size, height: size, color: Colors.grey[900], child: const Icon(Icons.music_note, color: Colors.white));
+}
+
+class _HighResArtwork extends StatelessWidget {
+  final MediaItem mediaItem;
+  final double? size;
+  final bool isBackground;
+
+  const _HighResArtwork({Key? key, required this.mediaItem, this.size, this.isBackground = false}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<MusicProvider>();
+    final albumId = mediaItem.extras?['albumId'] as int?;
+
+    if (albumId == null) {
+      return _defaultArtwork(size: size);
+    }
+
+    return FutureBuilder<Uint8List?>(
+      future: provider.getArtwork(albumId, ArtworkType.ALBUM),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null) {
+          final image = MemoryImage(snapshot.data!)
+          ;
+          if (isBackground) {
+            return Image(image: image, fit: BoxFit.cover, width: double.infinity, height: double.infinity);
+          }
+          return Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))],
+              image: DecorationImage(image: image, fit: BoxFit.cover),
+            ),
+          );
+        }
+        return _defaultArtwork(size: size);
+      },
+    );
+  }
+
+  Widget _defaultArtwork({double? size}) => Container(width: size, height: size, color: Colors.grey[900], child: const Icon(Icons.album, color: Colors.white, size: 50));
 }
 
 
