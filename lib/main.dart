@@ -9,7 +9,6 @@ import 'package:oxcy/screens/local_music_screen.dart';
 import 'package:oxcy/screens/home_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
-import 'package:oxcy/utils/custom_page_route.dart';
 
 void main() {
   runApp(
@@ -37,7 +36,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // FIX: Wrap with ScrollConfiguration for elastic scrolling
     return ScrollConfiguration(
       behavior: BouncingScrollBehavior(),
       child: MaterialApp(
@@ -46,13 +44,7 @@ class MyApp extends StatelessWidget {
         theme: ThemeData.dark().copyWith(
           scaffoldBackgroundColor: Colors.transparent,
           textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
-          // FIX: Correctly implement fade transitions
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-              TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
-            },
-          ),
+          // REMOVED: The old pageTransitionsTheme to prevent conflicts
         ),
         home: const SplashScreen(),
       ),
@@ -80,49 +72,61 @@ class _MainScaffoldState extends State<MainScaffold> {
     final provider = context.watch<MusicProvider>();
     final audioHandler = provider.audioHandler;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0C29),
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0F0C29),
-                  Color(0xFF302B63),
-                  Color(0xFF24243E)
-                ],
+    // FIX: Implement WillPopScope to intelligently handle the back button
+    return WillPopScope(
+      onWillPop: () async {
+        // If the player is expanded, the back button should collapse it first.
+        if (provider.isPlayerExpanded) {
+          provider.collapsePlayer();
+          return false; // This prevents the app from closing.
+        }
+        // If the player is not expanded, allow the default back action (exit app).
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F0C29),
+        body: Stack(
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0F0C29),
+                    Color(0xFF302B63),
+                    Color(0xFF24243E)
+                  ],
+                ),
               ),
             ),
-          ),
-          IndexedStack(
-            index: _currentIndex,
-            children: _pages,
-          ),
-          if (audioHandler != null)
-            StreamBuilder<MediaItem?>(
-              stream: audioHandler.mediaItem,
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const SizedBox.shrink();
-                return Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: provider.isPlayerExpanded ? 0 : 85,
-                  top: provider.isPlayerExpanded ? 0 : null,
-                  child: const SmartPlayer(),
-                );
-              },
+            IndexedStack(
+              index: _currentIndex,
+              children: _pages,
             ),
-          if (!provider.isPlayerExpanded)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildGlassNavBar(),
-            ),
-        ],
+            if (audioHandler != null)
+              StreamBuilder<MediaItem?>(
+                stream: audioHandler.mediaItem,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox.shrink();
+                  return Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: provider.isPlayerExpanded ? 0 : 85,
+                    top: provider.isPlayerExpanded ? 0 : null,
+                    child: const SmartPlayer(),
+                  );
+                },
+              ),
+            if (!provider.isPlayerExpanded)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _buildGlassNavBar(),
+              ),
+          ],
+        ),
       ),
     );
   }

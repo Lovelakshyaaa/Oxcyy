@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/album_songs_screen.dart';
+import 'package:oxcy/utils/shared_axis_page_route.dart'; // <-- IMPORT THE NEW ROUTE
 
 class LocalMusicScreen extends StatelessWidget {
   const LocalMusicScreen({Key? key}) : super(key: key);
@@ -48,7 +49,7 @@ class LocalMusicScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0).copyWith(bottom: 100.0),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        childAspectRatio: 1.0, // <-- FIX: Make album art square
+                        childAspectRatio: 1.0,
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
                       ),
@@ -69,9 +70,10 @@ class LocalMusicScreen extends StatelessWidget {
                           },
                           child: GestureDetector(
                             onTap: () {
+                              // FIX: Use the new SharedAxisPageRoute for a smooth transition
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => AlbumSongsScreen(album: album)),
+                                SharedAxisPageRoute(page: AlbumSongsScreen(album: album)),
                               );
                             },
                             child: GlassmorphicContainer(
@@ -83,7 +85,7 @@ class LocalMusicScreen extends StatelessWidget {
                               linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
                               borderGradient: LinearGradient(colors: [Colors.white.withOpacity(0.2), Colors.white.withOpacity(0.1)]),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch, // <-- FIX: Stretch to fill
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Expanded(
                                     child: ClipRRect(
@@ -92,8 +94,8 @@ class LocalMusicScreen extends StatelessWidget {
                                         id: album.id,
                                         type: ArtworkType.ALBUM,
                                         artworkQuality: FilterQuality.high,
-                                        size: 1000, // <-- FIX: Higher resolution artwork
-                                        artworkFit: BoxFit.cover, // <-- FIX: Fill the container
+                                        size: 1000,
+                                        artworkFit: BoxFit.cover,
                                         nullArtworkWidget: Container(
                                           color: Colors.grey.withOpacity(0.1),
                                           child: const Center(
