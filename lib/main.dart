@@ -2,13 +2,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:glassmorphism/glassmorphism.dart'; 
+import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/local_music_screen.dart';
-import 'package:oxcy/screens/home_screen.dart'; 
+import 'package:oxcy/screens/home_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
+import 'package:oxcy/utils/custom_page_route.dart';
 
 void main() {
   runApp(
@@ -28,8 +29,16 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'OXCY',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.transparent, 
+        scaffoldBackgroundColor: Colors.transparent,
         textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+        // FIX: Add fade transition and elastic scrolling
+        pageTransitionsTheme: PageTransitionsTheme(
+          builders: {
+            for (var platform in TargetPlatform.values)
+              platform: FadeUpwardsPageTransitionsBuilder(),
+          },
+        ),
+        androidOverscrollIndicator: AndroidOverscrollIndicator.stretch,
       ),
       home: const SplashScreen(),
     );
@@ -45,10 +54,10 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
-  
+
   final List<Widget> _pages = [
-    const LocalMusicScreen(), 
-    HomeScreen(),       
+    const LocalMusicScreen(),
+    HomeScreen(),
   ];
 
   @override
@@ -57,7 +66,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     final audioHandler = provider.audioHandler;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0C29), 
+      backgroundColor: const Color(0xFF0F0C29),
       body: Stack(
         children: [
           Container(
@@ -66,37 +75,36 @@ class _MainScaffoldState extends State<MainScaffold> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFF0F0C29), 
-                  Color(0xFF302B63), 
+                  Color(0xFF0F0C29),
+                  Color(0xFF302B63),
                   Color(0xFF24243E)
                 ],
               ),
             ),
           ),
-          
           IndexedStack(
             index: _currentIndex,
             children: _pages,
           ),
-          
           if (audioHandler != null)
             StreamBuilder<MediaItem?>(
               stream: audioHandler.mediaItem,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox.shrink();
                 return Positioned(
-                  left: 0, 
-                  right: 0, 
+                  left: 0,
+                  right: 0,
                   bottom: provider.isPlayerExpanded ? 0 : 85,
                   top: provider.isPlayerExpanded ? 0 : null,
                   child: const SmartPlayer(),
                 );
-              }
+              },
             ),
-
-          if (!provider.isPlayerExpanded) 
+          if (!provider.isPlayerExpanded)
             Positioned(
-              left: 0, right: 0, bottom: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: _buildGlassNavBar(),
             ),
         ],
@@ -111,12 +119,12 @@ class _MainScaffoldState extends State<MainScaffold> {
       borderRadius: 0,
       blur: 10,
       alignment: Alignment.center,
-      border: 1, 
+      border: 1,
       linearGradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.white.withOpacity(0.1), 
+          Colors.white.withOpacity(0.1),
           Colors.white.withOpacity(0.05),
         ],
       ),
@@ -129,7 +137,7 @@ class _MainScaffoldState extends State<MainScaffold> {
         ],
       ),
       child: BottomNavigationBar(
-        backgroundColor: Colors.transparent, 
+        backgroundColor: Colors.transparent,
         elevation: 0,
         currentIndex: _currentIndex,
         selectedItemColor: Colors.purpleAccent,

@@ -24,7 +24,7 @@ Future<AudioHandler> initAudioService() async {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
-  
+
   late final YoutubeExplode _youtubeVr;
   late final YoutubeExplode _youtubeAndroid;
 
@@ -41,10 +41,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await session.configure(const AudioSessionConfiguration.music());
     await _player.setAudioSource(_playlist, preload: false);
 
-    // Propagate player events to the UI
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
-
-    // Report the current media item
     _player.sequenceStateStream.listen((sequenceState) {
       final currentItem = sequenceState?.currentSource?.tag as MediaItem?;
       if (currentItem != null) mediaItem.add(currentItem);
@@ -71,6 +68,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } else {
       return AudioSource.uri(Uri.parse(item.id), tag: item);
     }
+  }
+
+  // FIX: Implement the setRepeatMode method
+  @override
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+    switch (repeatMode) {
+      case AudioServiceRepeatMode.none:
+        _player.setLoopMode(LoopMode.off);
+        break;
+      case AudioServiceRepeatMode.one:
+        _player.setLoopMode(LoopMode.one);
+        break;
+      case AudioServiceRepeatMode.group:
+      case AudioServiceRepeatMode.all:
+        _player.setLoopMode(LoopMode.all);
+        break;
+    }
+    // Broadcast the state change
+    playbackState.add(playbackState.value.copyWith(repeatMode: repeatMode));
   }
 
   @override
@@ -125,7 +141,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _youtubeAndroid.close();
     return super.stop();
   }
-  
+
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [
@@ -151,6 +167,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
       queueIndex: event.currentIndex,
+      // FIX: Ensure repeatMode is included in the state
+      repeatMode: const {
+        LoopMode.off: AudioServiceRepeatMode.none,
+        LoopMode.one: AudioServiceRepeatMode.one,
+        LoopMode.all: AudioServiceRepeatMode.all,
+      }[_player.loopMode]!,
     );
   }
 }

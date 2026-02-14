@@ -133,7 +133,6 @@ class MusicProvider with ChangeNotifier {
       orderType: OrderType.ASC_OR_SMALLER,
     );
 
-    // FIX: Convert track value to string before parsing to prevent type errors.
     albumSongs.sort((a, b) {
       int trackA = int.tryParse(a.track.toString()) ?? 0;
       int trackB = int.tryParse(b.track.toString()) ?? 0;
@@ -155,8 +154,14 @@ class MusicProvider with ChangeNotifier {
         .toList();
   }
 
+  // FIX: Fetch original quality artwork
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
-    return await _audioQuery.queryArtwork(id, type, size: 1000);
+    return await _audioQuery.queryArtwork(
+      id, 
+      type, 
+      format: ArtworkFormat.PNG,
+      size: 2048, // Request original quality
+    );
   }
 
   Future<void> search(String query) async {
