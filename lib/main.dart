@@ -20,27 +20,42 @@ void main() {
   );
 }
 
+// Custom scroll behavior for elastic scrolling on all platforms
+class BouncingScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return StretchingOverscrollIndicator(
+      axisDirection: details.direction,
+      child: child,
+    );
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'OXCY',
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.transparent,
-        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
-        // FIX: Add fade transition and elastic scrolling
-        pageTransitionsTheme: PageTransitionsTheme(
-          builders: {
-            for (var platform in TargetPlatform.values)
-              platform: FadeUpwardsPageTransitionsBuilder(),
-          },
+    // FIX: Wrap with ScrollConfiguration for elastic scrolling
+    return ScrollConfiguration(
+      behavior: BouncingScrollBehavior(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'OXCY',
+        theme: ThemeData.dark().copyWith(
+          scaffoldBackgroundColor: Colors.transparent,
+          textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+          // FIX: Correctly implement fade transitions
+          pageTransitionsTheme: const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+              TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
+            },
+          ),
         ),
-        androidOverscrollIndicator: AndroidOverscrollIndicator.stretch,
+        home: const SplashScreen(),
       ),
-      home: const SplashScreen(),
     );
   }
 }

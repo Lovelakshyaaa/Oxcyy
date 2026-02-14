@@ -1,67 +1,39 @@
-
-# OXCY Music App Blueprint
+# Blueprint: OXCY Music Player
 
 ## Overview
 
-OXCY is a sleek, modern music streaming application for Flutter that acts as an alternative to YouTube Music. It leverages `youtube_explode_dart` to source audio from YouTube videos and `just_audio` for high-quality playback. The app is designed with a dark, immersive UI featuring glassmorphism effects and a clean, iOS-inspired aesthetic.
+OXCY is a sleek, modern music player for Android that seamlessly integrates local music playback with online streaming from YouTube. It features a beautiful, glassmorphism-inspired interface with smooth animations and a focus on high-quality album art.
 
-## Style, Design, and Features
+## Features & Design
 
-### V1 - Initial Release
+### Core Functionality
+*   **Local & YouTube Playback:** Plays audio files from the user's device and streams audio from YouTube.
+*   **Search:** Users can search for music on YouTube.
+*   **Audio Handler:** Uses `audio_service` and `just_audio` for robust background audio playback, notification controls, and queue management.
+*   **State Management:** Uses `provider` to manage application state, including player status, search results, and local music library.
 
-*   **Core Architecture:**
-    *   **State Management:** `provider` for managing application state, including search results and player status.
-    *   **Audio Backend:** `youtube_explode_dart` for searching and extracting audio streams from YouTube, and `just_audio` for background-capable audio playback.
-    *   **UI Toolkit:** Flutter with Material Design components.
+### User Interface & Experience
+*   **Glassmorphism UI:** A beautiful, multi-layered "glass" effect is used for the navigation bar, creating a sense of depth and style.
+*   **Gradient Background:** A subtle, animated gradient provides a visually pleasing backdrop for the entire app.
+*   **Smooth Navigation:** Page transitions use a gentle fade effect, and scrolling has a natural, elastic feel for a polished user experience.
+*   **High-Quality Artwork:** The app is optimized to display album art in its original, highest possible quality, ensuring a visually rich experience.
+*   **Splash Screen:** A simple splash screen provides a professional entry point to the app.
 
-*   **Design System:**
-    *   **Theme:** A dark, sophisticated theme with a gradient background from deep black to purple, creating an immersive listening experience.
-    *   **Glassmorphism:** Manually implemented glass effect using `BackdropFilter` for UI elements like search bars and list items, giving the app a modern, layered look without external packages.
-    *   **Typography:** `GoogleFonts.poppins` is used throughout the app for a clean, modern, and readable text style.
-    *   **Imagery:** `cached_network_image` is used for efficiently loading and caching album art, ensuring a smooth and responsive UI.
+### Music Library & Player
+*   **Local Music Discovery:** Automatically scans the device for local audio files and organizes them by album.
+*   **Album & Song Views:** Users can browse their local music library by album and view the songs within each album.
+*   **Player Screen:** A dedicated player screen shows the currently playing track, artist, and high-resolution album art.
+*   **Playback Controls:** Standard playback controls (play/pause, next, previous, seek) are available.
+*   **Repeat & Shuffle:** The player supports repeating the current track or the entire queue, as well as shuffling the playlist.
 
-*   **Key Features:**
-    *   **Home Screen:**
-        *   A prominent, glass-style search bar at the top for discovering music.
-        *   A dynamic list of search results, each displayed in a glass-style card showing the track's thumbnail, title, and artist.
-        *   A loading indicator while searches are in progress.
-    *   **Player Screen:**
-        *   A full-screen, immersive player experience.
-        *   The background is a beautifully blurred version of the current track's album art.
-        *   A large, high-quality centered album art as the focal point.
-        *   Sleek, intuitive player controls (Play/Pause) and a song progress slider.
-    *   **Navigation:** Tapping a song in the search results seamlessly navigates to the full-screen player and begins playback.
+## Current Task: Final Touches & Polish
 
-## Current Plan: Initial Build
+The following changes have been implemented to complete the application:
 
-This is the initial creation of the application. The plan is to build all the core features described above.
+*   **Original Quality Artwork:** The app now fetches and displays album art in its original, highest possible quality.
+*   **Functional Loop Button:** The loop button in the player now correctly cycles through repeat modes (none, one, all).
+*   **Smooth Navigation:** Page transitions now use a fade effect for a more seamless experience.
+*   **Elastic Scrolling:** Scrolling physics have been adjusted to provide a more natural, "bouncing" feel.
+*   **Bug Fixes:** Several build errors related to sorting and type safety have been resolved.
 
-*   **Step 1: Project Setup:**
-    *   Remove the unused `glassmorphism` package from `pubspec.yaml` to adhere to the manual implementation requirement.
-    *   Create the necessary file structure: `lib/providers/`, `lib/screens/`.
-
-*   **Step 2: Create `main.dart`:**
-    *   Set up the main application entry point.
-    *   Implement the dark theme with the specified gradient and `GoogleFonts.poppins`.
-    *   Configure `ChangeNotifierProvider` to make the `MusicProvider` available throughout the widget tree.
-
-*   **Step 3: Create `providers/music_provider.dart`:**
-    *   Develop the `MusicProvider` class to handle all business logic.
-    *   Integrate `youtube_explode_dart` for searching videos.
-    *   Integrate `just_audio` for managing audio playback (play, pause, seek).
-    *   Manage and expose all necessary states: search results, loading status, and player state (playing, position, duration).
-
-*   **Step 4: Create `screens/home_screen.dart`:**
-    *   Build the home screen UI.
-    *   Implement the custom glassmorphism search bar.
-    *   Create the list view to display search results from `MusicProvider`.
-    *   Implement the navigation logic to the `PlayerScreen`.
-
-*   **Step 5: Create `screens/player_screen.dart`:**
-    *   Build the full-screen player UI.
-    *   Implement the blurred album art background effect.
-    *   Add the main album art, track information, and player controls (play/pause button and progress slider) linked to the `MusicProvider`.
-
-*   **Step 6: Finalize & Verify:**
-    *   Run `flutter pub get` to sync dependencies.
-    *   Ensure the application is free of analysis errors and runs correctly.
+This completes the development of the OXCY Music Player. The app is now fully functional, visually polished, and ready for use.
