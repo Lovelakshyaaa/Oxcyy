@@ -127,17 +127,16 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<Song>> getLocalSongsByAlbum(int albumId) async {
-    // FIX: Removed the failing sortType and will sort manually.
     List<SongModel> albumSongs = await _audioQuery.queryAudiosFrom(
       AudiosFromType.ALBUM_ID,
       albumId,
       orderType: OrderType.ASC_OR_SMALLER,
     );
 
-    // FIX: Sort songs by track number manually to avoid build errors.
+    // FIX: Convert track value to string before parsing to prevent type errors.
     albumSongs.sort((a, b) {
-      int trackA = int.tryParse(a.track ?? '0') ?? 0;
-      int trackB = int.tryParse(b.track ?? '0') ?? 0;
+      int trackA = int.tryParse(a.track.toString()) ?? 0;
+      int trackB = int.tryParse(b.track.toString()) ?? 0;
       return trackA.compareTo(trackB);
     });
 
