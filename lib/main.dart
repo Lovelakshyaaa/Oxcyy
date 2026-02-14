@@ -44,7 +44,6 @@ class MyApp extends StatelessWidget {
         theme: ThemeData.dark().copyWith(
           scaffoldBackgroundColor: Colors.transparent,
           textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
-          // REMOVED: The old pageTransitionsTheme to prevent conflicts
         ),
         home: const SplashScreen(),
       ),
@@ -67,20 +66,26 @@ class _MainScaffoldState extends State<MainScaffold> {
     HomeScreen(),
   ];
 
+  // FIX: Automatically scan for new music on app startup
+  @override
+  void initState() {
+    super.initState();
+    // Trigger a silent refresh of local music. 
+    // `listen: false` is crucial here because we are in `initState`.
+    Provider.of<MusicProvider>(context, listen: false).fetchLocalMusic();
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<MusicProvider>();
     final audioHandler = provider.audioHandler;
 
-    // FIX: Implement WillPopScope to intelligently handle the back button
     return WillPopScope(
       onWillPop: () async {
-        // If the player is expanded, the back button should collapse it first.
         if (provider.isPlayerExpanded) {
           provider.collapsePlayer();
-          return false; // This prevents the app from closing.
+          return false;
         }
-        // If the player is not expanded, allow the default back action (exit app).
         return true;
       },
       child: Scaffold(
@@ -109,7 +114,9 @@ class _MainScaffoldState extends State<MainScaffold> {
                 stream: audioHandler.mediaItem,
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) return const SizedBox.shrink();
-                  return Positioned(
+                  return AnimatedPositioned(
+                    duration: const Duration(milliseconds: 500),
+                    curve: Curves.fastOutSlowIn, 
                     left: 0,
                     right: 0,
                     bottom: provider.isPlayerExpanded ? 0 : 85,

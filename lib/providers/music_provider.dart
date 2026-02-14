@@ -61,7 +61,6 @@ class MusicProvider with ChangeNotifier {
   bool _isShuffleEnabled = false;
   bool get isShuffleEnabled => _isShuffleEnabled;
 
-  // FIX: Add local state for optimistic UI updates
   AudioServiceRepeatMode _repeatMode = AudioServiceRepeatMode.none;
   AudioServiceRepeatMode get repeatMode => _repeatMode;
 
@@ -78,7 +77,6 @@ class MusicProvider with ChangeNotifier {
         androidNotificationOngoing: true,
       ),
     );
-    // Listen to the audio handler's repeat mode changes
     _audioHandler?.playbackState.listen((playbackState) {
       if (_repeatMode != playbackState.repeatMode) {
         _repeatMode = playbackState.repeatMode;
@@ -165,12 +163,13 @@ class MusicProvider with ChangeNotifier {
         .toList();
   }
 
+  // FIX: Explicitly request PNG for lossless artwork in the player
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
     return await _audioQuery.queryArtwork(
       id,
       type,
-      format: ArtworkFormat.PNG,
-      size: 2048,
+      format: ArtworkFormat.PNG, // Ensures original, lossless quality
+      size: 2048, // Request high resolution
     );
   }
 
@@ -283,7 +282,6 @@ class MusicProvider with ChangeNotifier {
   void previous() => _audioHandler?.skipToPrevious();
   void seek(Duration pos) => _audioHandler?.seek(pos);
 
-  // FIX: Implement optimistic UI for repeat button
   void cycleRepeatMode() {
     if (_audioHandler == null) return;
     final nextMode = {
@@ -294,8 +292,8 @@ class MusicProvider with ChangeNotifier {
 
     if (nextMode != null) {
       _repeatMode = nextMode;
-      notifyListeners(); // Update UI instantly
-      _audioHandler!.setRepeatMode(nextMode); // Send command to player
+      notifyListeners(); 
+      _audioHandler!.setRepeatMode(nextMode);
     }
   }
 

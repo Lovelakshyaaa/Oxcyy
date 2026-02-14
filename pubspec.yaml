@@ -24,6 +24,7 @@ dependencies:
   glassmorphism: ^3.0.0
   fluentui_system_icons: ^1.1.225
   animations: ^2.1.1
+  flutter_staggered_animations: ^1.1.1
 
   # STATE
   provider: ^6.1.5+1
