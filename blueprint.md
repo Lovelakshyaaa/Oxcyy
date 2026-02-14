@@ -17,7 +17,7 @@ A modern, glassmorphism-style music player for Android designed to provide a vis
     *   **Player Transitions:** Uses `AnimatedPositioned` to create a fluid, graceful animation when expanding and collapsing the music player.
 *   **Scrolling:** Implements a custom "bouncing" (elastic) scroll behavior for a more dynamic and engaging feel when browsing lists.
 *   **Iconography:** Features a custom launcher icon for a unique brand identity.
-*   **Image Quality:** All album artwork is rendered using the lossless **PNG** format to ensure the highest possible fidelity and original, pixel-perfect quality across the entire application.
+*   **Image Quality:** All album and track artwork is rendered in the high-quality **PNG** format. This is achieved by using the `getArtwork` method from the `MusicProvider`, which fetches the lossless artwork data directly.
 
 ### Core Features
 
@@ -36,13 +36,14 @@ A modern, glassmorphism-style music player for Android designed to provide a vis
     *   `SharedAxisPageRoute` ensures all screen transitions are consistent and animated.
     *   **Intelligent Back Button:** `WillPopScope` is implemented to provide a superior user experience. Pressing the back button will first collapse the expanded player before exiting the app, preventing accidental closure.
 
-## Current Change: Implement Staggered List Animations
+## Current Change: Restore High-Quality Artwork
 
-This section documents the implementation of professional loading animations for the app's lists.
+This section documents the correction of a previous fix to ensure high-quality artwork is displayed without causing build errors.
 
-*   **Goal:** To animate the album grid and song lists with a cascading slide-and-fade effect as they appear on screen.
-*   **Package:** Utilized the `flutter_staggered_animations: ^1.1.1` package.
-*   **Implementation:**
-    1.  **Album Grid:** In `lib/screens/local_music_screen.dart`, the `GridView` was wrapped in an `AnimationLimiter` and each item was animated using `AnimationConfiguration.staggeredGrid`, `SlideAnimation`, and `FadeInAnimation`.
-    2.  **Song List:** In `lib/screens/album_songs_screen.dart`, the `SliverList` was wrapped in an `AnimationLimiter`, and each `ListTile` was animated using `AnimationConfiguration.staggeredList`, `SlideAnimation`, and `FadeInAnimation`.
-*   **Result:** The app now has a beautiful, consistent, and professional animation for all lists, significantly enhancing the user experience.
+*   **Goal:** To restore the display of high-quality, lossless PNG artwork for all album and track images.
+*   **Problem:** The `QueryArtworkWidget` from the `on_audio_query` package does not support specifying the artwork format directly, which led to a build error when attempted.
+*   **Solution:**
+    1.  **Replaced `QueryArtworkWidget`:** In `lib/screens/local_music_screen.dart` and `lib/screens/album_songs_screen.dart`, the `QueryArtworkWidget` was replaced with a `FutureBuilder`.
+    2.  **Used `MusicProvider.getArtwork`:** The `FutureBuilder` now calls the `getArtwork` method from the `MusicProvider`, which correctly fetches the high-quality PNG artwork data.
+    3.  **Displayed with `Image.memory`:** The returned image data is now displayed using the `Image.memory` widget.
+*   **Result:** The app now correctly displays high-quality PNG artwork for all images, as originally intended, and the previous build error is resolved.

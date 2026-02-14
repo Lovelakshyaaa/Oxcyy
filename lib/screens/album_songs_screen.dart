@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -43,17 +45,21 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                 widget.album.album,
                 style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
               ),
-              background: QueryArtworkWidget(
-                id: widget.album.id,
-                type: ArtworkType.ALBUM,
-                artworkFormat: ArtworkFormat.PNG,
-                artworkQuality: FilterQuality.high,
-                artworkFit: BoxFit.cover,
-                size: 1000,
-                nullArtworkWidget: Container(
-                  color: Colors.grey[900],
-                  child: const Icon(Icons.album, color: Colors.white, size: 150),
-                ),
+              background: FutureBuilder<Uint8List?>(
+                future: musicProvider.getArtwork(widget.album.id, ArtworkType.ALBUM),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data != null) {
+                    return Image.memory(
+                      snapshot.data!,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                    );
+                  }
+                  return Container(
+                    color: Colors.grey[900],
+                    child: const Icon(Icons.album, color: Colors.white, size: 150),
+                  );
+                },
               ),
             ),
           ),
@@ -66,7 +72,7 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                 );
               }
               if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                return const SliverToBoxter(
+                return const SliverToBoxAdapter(
                   child: Center(child: Text('No songs found in this album.')),
                 );
               }
@@ -88,18 +94,25 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                               contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                               leading: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: QueryArtworkWidget(
-                                  id: song.localId!,
-                                  type: ArtworkType.AUDIO,
-                                  artworkFormat: ArtworkFormat.PNG,
-                                  artworkWidth: 50,
-                                  artworkHeight: 50,
-                                  nullArtworkWidget: Container(
-                                    width: 50,
-                                    height: 50,
-                                    color: Colors.grey.withOpacity(0.2),
-                                    child: const Icon(Icons.music_note, color: Colors.white70),
-                                  ),
+                                child: FutureBuilder<Uint8List?>(
+                                  future: musicProvider.getArtwork(song.localId!, ArtworkType.AUDIO),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.hasData && snapshot.data != null) {
+                                      return Image.memory(
+                                        snapshot.data!,
+                                        width: 50,
+                                        height: 50,
+                                        fit: BoxFit.cover,
+                                        gaplessPlayback: true,
+                                      );
+                                    }
+                                    return Container(
+                                      width: 50,
+                                      height: 50,
+                                      color: Colors.grey.withOpacity(0.2),
+                                      child: const Icon(Icons.music_note, color: Colors.white70),
+                                    );
+                                  },
                                 ),
                               ),
                               title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w500)),

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -86,19 +88,23 @@ class LocalMusicScreen extends StatelessWidget {
                                         Expanded(
                                           child: ClipRRect(
                                             borderRadius: const BorderRadius.vertical(top: Radius.circular(20.0)),
-                                            child: QueryArtworkWidget(
-                                              id: album.id,
-                                              type: ArtworkType.ALBUM,
-                                              artworkFormat: ArtworkFormat.PNG,
-                                              artworkQuality: FilterQuality.high,
-                                              size: 1000,
-                                              artworkFit: BoxFit.cover,
-                                              nullArtworkWidget: Container(
-                                                color: Colors.grey.withOpacity(0.1),
-                                                child: const Center(
-                                                  child: Icon(Icons.album, color: Colors.white54, size: 50),
-                                                ),
-                                              ),
+                                            child: FutureBuilder<Uint8List?>(
+                                              future: provider.getArtwork(album.id, ArtworkType.ALBUM),
+                                              builder: (context, snapshot) {
+                                                if (snapshot.hasData && snapshot.data != null) {
+                                                  return Image.memory(
+                                                    snapshot.data!,
+                                                    fit: BoxFit.cover,
+                                                    gaplessPlayback: true,
+                                                  );
+                                                }
+                                                return Container(
+                                                  color: Colors.grey.withOpacity(0.1),
+                                                  child: const Center(
+                                                    child: Icon(Icons.album, color: Colors.white54, size: 50),
+                                                  ),
+                                                );
+                                              },
                                             ),
                                           ),
                                         ),
