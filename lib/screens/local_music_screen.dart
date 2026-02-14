@@ -48,70 +48,84 @@ class LocalMusicScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0).copyWith(bottom: 100.0),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        childAspectRatio: 0.8,
+                        childAspectRatio: 1.0, // <-- FIX: Make album art square
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
                       ),
                       itemCount: provider.localAlbums.length,
                       itemBuilder: (context, index) {
                         final album = provider.localAlbums[index];
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => AlbumSongsScreen(album: album)),
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 700),
+                          builder: (context, value, child) {
+                            return Opacity(
+                              opacity: value,
+                              child: Transform.translate(
+                                offset: Offset(0, 50 * (1 - value)),
+                                child: child,
+                              ),
                             );
                           },
-                          child: GlassmorphicContainer(
-                            width: double.infinity,
-                            height: double.infinity,
-                            borderRadius: 20,
-                            blur: 15,
-                            border: 1,
-                            linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
-                            borderGradient: LinearGradient(colors: [Colors.white.withOpacity(0.2), Colors.white.withOpacity(0.1)]),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20.0)),
-                                    child: QueryArtworkWidget(
-                                      id: album.id,
-                                      type: ArtworkType.ALBUM,
-                                      artworkQuality: FilterQuality.high,
-                                      size: 500, // Higher resolution artwork
-                                      artworkFit: BoxFit.cover,
-                                      nullArtworkWidget: Container(
-                                        color: Colors.grey.withOpacity(0.1),
-                                        child: const Center(
-                                          child: Icon(Icons.album, color: Colors.white54, size: 50),
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => AlbumSongsScreen(album: album)),
+                              );
+                            },
+                            child: GlassmorphicContainer(
+                              width: double.infinity,
+                              height: double.infinity,
+                              borderRadius: 20,
+                              blur: 15,
+                              border: 1,
+                              linearGradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)]),
+                              borderGradient: LinearGradient(colors: [Colors.white.withOpacity(0.2), Colors.white.withOpacity(0.1)]),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch, // <-- FIX: Stretch to fill
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20.0)),
+                                      child: QueryArtworkWidget(
+                                        id: album.id,
+                                        type: ArtworkType.ALBUM,
+                                        artworkQuality: FilterQuality.high,
+                                        size: 1000, // <-- FIX: Higher resolution artwork
+                                        artworkFit: BoxFit.cover, // <-- FIX: Fill the container
+                                        nullArtworkWidget: Container(
+                                          color: Colors.grey.withOpacity(0.1),
+                                          child: const Center(
+                                            child: Icon(Icons.album, color: Colors.white54, size: 50),
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(10.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                       Text(
-                                        album.album,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                                      ),
-                                      Text(
-                                        album.artist ?? "Unknown Artist",
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
-                                      ),
-                                    ],
+                                  Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                         Text(
+                                          album.album,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          album.artist ?? "Unknown Artist",
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         );

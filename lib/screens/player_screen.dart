@@ -25,7 +25,6 @@ class _SmartPlayerState extends State<SmartPlayer> {
     super.didChangeDependencies();
     final audioHandler = context.read<MusicProvider>().audioHandler;
     if (audioHandler != null && _mediaItemSubscription == null) {
-      // Listen to the media item stream and update the state, preventing the UI from disappearing.
       _mediaItemSubscription = audioHandler.mediaItem.distinct().listen((mediaItem) {
         if (mediaItem != null) {
           setState(() {
@@ -70,7 +69,6 @@ class _SmartPlayerState extends State<SmartPlayer> {
   }
 }
 
-// MiniPlayerView: Optimized for the collapsed state.
 class MiniPlayerView extends StatelessWidget {
   final MediaItem mediaItem;
   final AudioHandler audioHandler;
@@ -112,7 +110,6 @@ class MiniPlayerView extends StatelessWidget {
   }
 }
 
-// FullPlayerView: The main expanded player UI.
 class FullPlayerView extends StatelessWidget {
   final MediaItem mediaItem;
   final AudioHandler audioHandler;
@@ -127,7 +124,7 @@ class FullPlayerView extends StatelessWidget {
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 750),
             transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-            child: _Artwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: double.infinity, highRes: true),
+            child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: double.infinity, isBackground: true),
           ),
         ),
         Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
@@ -160,14 +157,11 @@ class FullPlayerView extends StatelessWidget {
   }
 }
 
-// -- WIDGETS --
-
 class _Artwork extends StatelessWidget {
   final MediaItem mediaItem;
   final double size;
-  final bool highRes;
 
-  const _Artwork({Key? key, required this.mediaItem, required this.size, this.highRes = false}) : super(key: key);
+  const _Artwork({Key? key, required this.mediaItem, required this.size}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -196,24 +190,45 @@ class _Artwork extends StatelessWidget {
 class _HighResArtwork extends StatelessWidget {
   final MediaItem mediaItem;
   final double size;
-  const _HighResArtwork({Key? key, required this.mediaItem, required this.size}) : super(key: key);
+  final bool isBackground;
+
+  const _HighResArtwork({Key? key, required this.mediaItem, required this.size, this.isBackground = false}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: _Artwork(mediaItem: mediaItem, size: size, highRes: true),
-      ),
+    final provider = context.read<MusicProvider>();
+    final artworkId = mediaItem.extras?['albumId'] ?? mediaItem.extras?['artworkId'];
+
+    if (artworkId == null) {
+      return _defaultArtwork();
+    }
+
+    return FutureBuilder<ArtworkModel?>(
+      future: provider.getArtwork(artworkId, isBackground ? ArtworkType.ALBUM : ArtworkType.AUDIO),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data!.artwork != null) {
+          final image = MemoryImage(snapshot.data!.artwork!)
+          ;
+          return isBackground
+              ? Image(image: image, fit: BoxFit.cover, width: double.infinity, height: double.infinity)
+              : Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 30, offset: Offset(0, 10))],
+                    image: DecorationImage(image: image, fit: BoxFit.cover),
+                  ),
+                );
+        }
+        return isBackground ? const SizedBox.shrink() : _defaultArtwork(size: size);
+      },
     );
   }
+
+  Widget _defaultArtwork({double? size}) => Container(width: size, height: size, color: Colors.grey[900], child: const Icon(Icons.music_note, color: Colors.white));
 }
+
 
 class _SongInfoCard extends StatelessWidget {
   final MediaItem mediaItem;

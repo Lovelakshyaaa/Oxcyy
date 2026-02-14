@@ -14,6 +14,7 @@ class Song {
   final String thumbUrl;
   final String type;
   final int? localId;
+  final int? albumId; // Keep track of album ID
   final Duration? duration;
 
   Song({
@@ -23,13 +24,13 @@ class Song {
     required this.thumbUrl,
     required this.type,
     this.localId,
+    this.albumId, 
     this.duration,
   });
 }
 
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
-  // Properties
   final OnAudioQuery _audioQuery = OnAudioQuery();
   final YoutubeExplode _yt = YoutubeExplode();
 
@@ -47,7 +48,6 @@ class MusicProvider with ChangeNotifier {
   
   List<Song> _shuffledSongs = [];
 
-
   bool _isSearching = false;
   bool get isSearching => _isSearching;
 
@@ -60,13 +60,10 @@ class MusicProvider with ChangeNotifier {
   bool _isShuffleEnabled = false;
   bool get isShuffleEnabled => _isShuffleEnabled;
 
-
-  // Constructor
   MusicProvider() {
     _init();
   }
 
-  // Initialization
   Future<void> _init() async {
     _audioHandler = await AudioService.init(
       builder: () => MyAudioHandler(),
@@ -79,7 +76,6 @@ class MusicProvider with ChangeNotifier {
     fetchLocalMusic();
   }
 
-  // Local Music Fetching
   Future<void> fetchLocalMusic() async {
     _isFetchingLocal = true;
     notifyListeners();
@@ -110,6 +106,7 @@ class MusicProvider with ChangeNotifier {
                   thumbUrl: "",
                   type: 'local',
                   localId: s.id,
+                  albumId: s.albumId,
                   duration: Duration(milliseconds: s.duration ?? 0),
                 ))
             .toList();
@@ -128,18 +125,36 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // Helper to get songs for a specific album
-  List<Song> getLocalSongsByAlbum(int albumId) {
-    return _localSongs.where((s) {
-      // This is a workaround since SongModel doesn't directly link.
-      // A better implementation would parse the albumId from the song's URI or file path if possible.
-      // For now, we rely on the songs being in the main list.
-      // This logic needs to be improved based on how OnAudioQuery links songs to albums.
-      return true; // This needs a proper implementation
-    }).toList();
+  // FIX: Correctly query songs for a specific album
+  Future<List<Song>> getLocalSongsByAlbum(int albumId) async {
+    List<SongModel> albumSongs = await _audioQuery.queryAudiosFrom(
+      AudiosFromType.ALBUM_ID,
+      albumId,
+      sortType: SongSortType.TRACK,
+      orderType: OrderType.ASC_OR_SMALLER,
+    );
+
+    return albumSongs
+        .where((s) => (s.isMusic ?? false) && (s.duration ?? 0) > 10000)
+        .map((s) => Song(
+              id: s.uri!,
+              title: s.title,
+              artist: s.artist ?? "Unknown",
+              thumbUrl: "",
+              type: 'local',
+              localId: s.id,
+              albumId: s.albumId,
+              duration: Duration(milliseconds: s.duration ?? 0),
+            ))
+        .toList();
   }
 
-  // Search
+  // FIX: Get high-resolution artwork for the player
+  Future<ArtworkModel?> getArtwork(int id, ArtworkType type) async {
+    final artwork = await _audioQuery.queryArtwork(id, type, size: 1000);
+    return artwork;
+  }
+
   Future<void> search(String query) async {
     if (query.isEmpty) return;
     _isSearching = true;
@@ -166,7 +181,6 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // Playback
   Future<void> play(Song song, {List<Song>? newQueue}) async {
     if (_audioHandler == null) return;
 
@@ -233,11 +247,10 @@ class MusicProvider with ChangeNotifier {
       artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
       genre: s.type,
       duration: s.duration,
-      extras: {'artworkId': s.localId},
+      extras: {'artworkId': s.localId, 'albumId': s.albumId},
     );
   }
 
-  // Playback Controls
   void togglePlayPause() {
     if (_audioHandler?.playbackState.value.playing == true) {
       _audioHandler!.pause();
@@ -267,7 +280,6 @@ class MusicProvider with ChangeNotifier {
     final newMode = _isShuffleEnabled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none;
     _audioHandler!.setShuffleMode(newMode);
     
-    // Re-order the local song list based on shuffle state
     if (_isShuffleEnabled) {
       _shuffledSongs = List.from(_localSongs)..shuffle();
       _updateQueueWithSongs(_shuffledSongs);
@@ -278,8 +290,6 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
-
-  // UI Controls
   void togglePlayerView() {
     _isPlayerExpanded = !_isPlayerExpanded;
     notifyListeners();
@@ -292,7 +302,6 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  // Cleanup
   @override
   void dispose() {
     _yt.close();
