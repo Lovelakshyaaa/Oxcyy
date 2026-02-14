@@ -48,16 +48,20 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
               background: FutureBuilder<Uint8List?>(
                 future: musicProvider.getArtwork(widget.album.id, ArtworkType.ALBUM),
                 builder: (context, snapshot) {
-                  if (snapshot.hasData && snapshot.data != null) {
-                    return Image.memory(
-                      snapshot.data!,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                    );
-                  }
-                  return Container(
-                    color: Colors.grey[900],
-                    child: const Icon(Icons.album, color: Colors.white, size: 150),
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 500),
+                    child: snapshot.hasData && snapshot.data != null
+                        ? Image.memory(
+                            snapshot.data!,
+                            key: const ValueKey<int>(1),
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          )
+                        : Container(
+                            key: const ValueKey<int>(2),
+                            color: Colors.grey[900],
+                            child: const Icon(Icons.album, color: Colors.white, size: 150),
+                          ),
                   );
                 },
               ),

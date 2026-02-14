@@ -15,6 +15,7 @@ A modern, glassmorphism-style music player for Android designed to provide a vis
     *   **Staggered Lists:** A cascading slide-and-fade animation is applied to the album grid and song lists as they load, creating a professional and engaging effect.
     *   **Screen Navigation:** Employs `SharedAxisTransition` for smooth, horizontal slide-and-fade animations between screens.
     *   **Player Transitions:** Uses `AnimatedPositioned` to create a fluid, graceful animation when expanding and collapsing the music player.
+    *   **Artwork Fade-In:** A smooth cross-fade animation is applied to the main album art on the song screen, creating a seamless transition from the placeholder to the loaded image.
 *   **Scrolling:** Implements a custom "bouncing" (elastic) scroll behavior for a more dynamic and engaging feel when browsing lists.
 *   **Iconography:** Features a custom launcher icon for a unique brand identity.
 *   **Image Quality:** All album and track artwork is rendered in the high-quality **PNG** format. This is achieved by using the `getArtwork` method from the `MusicProvider`, which fetches the lossless artwork data directly.
@@ -36,14 +37,11 @@ A modern, glassmorphism-style music player for Android designed to provide a vis
     *   `SharedAxisPageRoute` ensures all screen transitions are consistent and animated.
     *   **Intelligent Back Button:** `WillPopScope` is implemented to provide a superior user experience. Pressing the back button will first collapse the expanded player before exiting the app, preventing accidental closure.
 
-## Current Change: Restore High-Quality Artwork
+## Current Change: Add Seamless Artwork Animation
 
-This section documents the correction of a previous fix to ensure high-quality artwork is displayed without causing build errors.
+This section documents the final polishing touch added to the album songs screen.
 
-*   **Goal:** To restore the display of high-quality, lossless PNG artwork for all album and track images.
-*   **Problem:** The `QueryArtworkWidget` from the `on_audio_query` package does not support specifying the artwork format directly, which led to a build error when attempted.
-*   **Solution:**
-    1.  **Replaced `QueryArtworkWidget`:** In `lib/screens/local_music_screen.dart` and `lib/screens/album_songs_screen.dart`, the `QueryArtworkWidget` was replaced with a `FutureBuilder`.
-    2.  **Used `MusicProvider.getArtwork`:** The `FutureBuilder` now calls the `getArtwork` method from the `MusicProvider`, which correctly fetches the high-quality PNG artwork data.
-    3.  **Displayed with `Image.memory`:** The returned image data is now displayed using the `Image.memory` widget.
-*   **Result:** The app now correctly displays high-quality PNG artwork for all images, as originally intended, and the previous build error is resolved.
+*   **Goal:** To eliminate the visual "glitch" of the placeholder appearing for a moment before the main album art loads.
+*   **Implementation:** In `lib/screens/album_songs_screen.dart`, the `FutureBuilder` responsible for displaying the large album art was wrapped in an `AnimatedSwitcher`.
+*   **Effect:** This creates a graceful 500ms cross-fade animation between the placeholder icon and the final, high-quality image, resulting in a perfectly seamless and professional user experience.
+*   **Result:** The final visual detail has been polished, making the app feel incredibly fluid and complete.
