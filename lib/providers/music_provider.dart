@@ -38,6 +38,9 @@ class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
 
+  // Artwork Caching
+  final Map<String, Uint8List> _artworkCache = {};
+
   List<Song> _searchResults = [];
   List<Song> get searchResults => _searchResults;
 
@@ -163,14 +166,26 @@ class MusicProvider with ChangeNotifier {
         .toList();
   }
 
-  // FIX: Explicitly request PNG for lossless artwork in the player
+  // Caching enabled for lossless artwork
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
-    return await _audioQuery.queryArtwork(
+    final String cacheKey = '${type.toString()}_$id';
+
+    if (_artworkCache.containsKey(cacheKey)) {
+      return _artworkCache[cacheKey];
+    }
+
+    final Uint8List? artwork = await _audioQuery.queryArtwork(
       id,
       type,
       format: ArtworkFormat.PNG, // Ensures original, lossless quality
       size: 2048, // Request high resolution
     );
+
+    if (artwork != null) {
+      _artworkCache[cacheKey] = artwork;
+    }
+
+    return artwork;
   }
 
   Future<void> search(String query) async {
