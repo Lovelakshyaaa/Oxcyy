@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
 import 'package:rxdart/rxdart.dart';
 import 'dart:async';
 
@@ -23,7 +23,7 @@ Future<AudioHandler> initAudioService() async {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
-  final _yt = YoutubeExplode();
+  final _yt = YtMusicApi();
 
   MyAudioHandler() {
     _init();
@@ -61,9 +61,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<AudioSource> _createAudioSource(MediaItem item) async {
     if (item.genre == 'youtube') {
       try {
-        var manifest = await _yt.videos.streamsClient.getManifest(item.extras!['id']);
-        var url = manifest.audioOnly.withHighestBitrate().url;
-        return AudioSource.uri(url, tag: item);
+        var url = await _yt.getAudioUrl(item.extras!['id']);
+        return AudioSource.uri(Uri.parse(url), tag: item);
       } catch (e) {
         print('Error getting stream URL for ${item.id}: $e');
         throw Exception('Could not get stream URL for ${item.id}');
@@ -167,7 +166,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> stop() async {
     await _player.stop();
     await _player.dispose();
-    _yt.close();
     return super.stop();
   }
 

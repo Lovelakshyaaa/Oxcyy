@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
@@ -33,7 +33,7 @@ class Song {
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  final YoutubeExplode _yt = YoutubeExplode();
+  final YtMusicApi _yt = YtMusicApi();
 
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
@@ -188,15 +188,29 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      var searchResults = await _yt.search.search(query);
-      _searchResults = searchResults.map((v) {
+      var searchResults = await _yt.search(query, filter: 'songs');
+      _searchResults = searchResults.map<Song>((v) {
+        String artistName = (v['artists'] as List?)?.map((a) => a['name'])?.join(', ') ?? 'Unknown';
+        String thumb = (v['thumbnails'] as List?)?.last?['url'] ?? '';
+        
+        Duration? songDuration;
+        if (v['duration'] is String) {
+          final parts = v['duration'].split(':');
+          if (parts.length == 2) {
+             songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
+          }
+        } else if (v['duration_seconds'] is int) {
+           songDuration = Duration(seconds: v['duration_seconds']);
+        }
+
+
         return Song(
-          id: v.id.value,
-          title: v.title,
-          artist: v.author,
-          thumbUrl: v.thumbnails.highResUrl,
+          id: v['videoId'],
+          title: v['title'],
+          artist: artistName,
+          thumbUrl: thumb,
           type: 'youtube',
-          duration: v.duration,
+          duration: songDuration,
         );
       }).toList();
     } catch (e) {
@@ -316,7 +330,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _yt.close();
+    //_yt.close(); // YtMusicApi doesn't have a close method
     super.dispose();
   }
 }
