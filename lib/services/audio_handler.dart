@@ -23,7 +23,7 @@ Future<AudioHandler> initAudioService() async {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
-  YtMusic? _yt;
+  YtFlutterMusicapi? _yt;
 
   MyAudioHandler() {
     _init();

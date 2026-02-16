@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
+import 'package:yt_flutter_musicapi/models/searchModel.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
@@ -33,7 +34,7 @@ class Song {
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  YtMusic? _yt;
+  YtFlutterMusicapi? _yt;
 
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
@@ -189,27 +190,14 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      await for (final result in _yt!.streamSearchResults(query: query, filter: 'songs')) {
-          String artistName = (result['artists'] as List?)?.map((a) => a['name'])?.join(', ') ?? 'Unknown';
-          String thumb = (result['thumbnails'] as List?)?.last?['url'] ?? '';
-          
-          Duration? songDuration;
-          if (result['duration'] is String) {
-            final parts = result['duration'].split(':');
-            if (parts.length == 2) {
-                songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
-            }
-          } else if (result['duration_seconds'] is int) {
-            songDuration = Duration(seconds: result['duration_seconds']);
-          }
-
+      await for (final SearchResult result in _yt!.streamSearchResults(query: query, filter: 'songs')) {
           final song = Song(
-            id: result['videoId'],
-            title: result['title'],
-            artist: artistName,
-            thumbUrl: thumb,
+            id: result.videoId,
+            title: result.title,
+            artist: result.artists.join(', '),
+            thumbUrl: result.albumArt ?? '',
             type: 'youtube',
-            duration: songDuration,
+            duration: result.duration,
           );
 
           _searchResults.add(song);

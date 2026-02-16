@@ -1,0 +1,621 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:yt_flutter_musicapi/models/artistAlbums.dart';
+import 'package:yt_flutter_musicapi/models/relatedSongModel.dart';
+import 'package:yt_flutter_musicapi/models/artistsStreamModel.dart';
+import 'package:yt_flutter_musicapi/models/searchModel.dart';
+import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatefulWidget {
+  @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'YouTube Music API Tester',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: Colors.white,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+        ),
+      ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Color(0xFF121212),
+        appBarTheme: AppBarTheme(
+          backgroundColor: Color(0xFF1E1E1E),
+          foregroundColor: Colors.white,
+        ),
+        cardTheme: CardThemeData(color: Color(0xFF1E1E1E)),
+        textTheme: TextTheme(
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white70),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+        ),
+      ),
+      themeMode: AppSettings.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: MusicApiTestPage(),
+    );
+  }
+
+  // Call this method from your settings dialog callback
+  void updateTheme() {
+    setState(() {
+      // This will trigger a rebuild with the new theme
+    });
+  }
+}
+
+class AppSettings {
+  static int limit = 5;
+  static AudioQuality audioQuality = AudioQuality.veryHigh;
+  static ThumbnailQuality thumbnailQuality = ThumbnailQuality.veryHigh;
+  static bool isDarkMode = true;
+  static int batchSize = 4;
+  static int maxAlbums = 5;
+  static int maxSingles = 5;
+  static int maxSongsPerAlbum = 10;
+  static int maxSongsPerSingle = 10;
+  static String chartsCountry = 'ZZ'; // ZZ = Global, US = United States, etc.
+  static int chartsLimit = 50;
+  static int maxWorkers = 5;
+  static String mode = 'auto'; // 'auto', 'batch', or 'stream'
+  static String artistName = 'Ed Sheeran';
+  static String testVideoId = '4NRXx6U8ABQ'; // Default video ID
+  static List<Map<String, String>> testSongs = [
+    {'title': 'Perfect', 'artist': 'Ed Sheeran'},
+    {'title': 'Bad Guy', 'artist': 'Billie Eilish'},
+    {'title': 'Blinding Lights', 'artist': 'The Weeknd'},
+  ];
+  static int get limitalbums => maxAlbums;
+  static List<Map<String, String>> batchTestSongs = [
+    {'title': 'Bohemian Rhapsody', 'artist': 'Queen'},
+    {'title': 'Sweet Child O\' Mine', 'artist': 'Guns N\' Roses'},
+    {'title': 'Hotel California', 'artist': 'Eagles'},
+    {'title': 'Enter Sandman', 'artist': 'Metallica'},
+    {'title': 'Livin\' on a Prayer', 'artist': 'Bon Jovi'},
+    {'title': 'Seven Nation Army', 'artist': 'The White Stripes'},
+    {'title': 'In the End', 'artist': 'Linkin Park'},
+    {'title': 'Mr. Brightside', 'artist': 'The Killers'},
+    {'title': 'Radioactive', 'artist': 'Imagine Dragons'},
+    {'title': 'Use Somebody', 'artist': 'Kings of Leon'},
+    {'title': 'Take Me Out', 'artist': 'Franz Ferdinand'},
+    {'title': 'The Pretender', 'artist': 'Foo Fighters'},
+    {'title': 'Starlight', 'artist': 'Muse'},
+  ];
+
+  static String relatedSongTitle = 'Perfect';
+  static String relatedSongArtist = 'Ed Sheeran';
+}
+
+class Inspector {
+  static void checkRules(List<dynamic> results, String operation) {
+    print('🔍 INSPECTOR: Checking rules for $operation');
+
+    if (results.isEmpty) {
+      print('❌ INSPECTOR: No results returned');
+      return;
+    }
+
+    if (results.length > AppSettings.limit) {
+      print(
+        '❌ INSPECTOR: Limit exceeded! Expected: ${AppSettings.limit}, Got: ${results.length}',
+      );
+    } else {
+      print(
+        '✅ INSPECTOR: Limit respected: ${results.length}/${AppSettings.limit}',
+      );
+    }
+
+    for (int i = 0; i < results.length; i++) {
+      var item = results[i];
+      print('📋 INSPECTOR: Item ${i + 1}:');
+
+      if (item is SearchResult) {
+        _checkSearchResult(item);
+      } else if (item is RelatedSong) {
+        _checkRelatedSong(item);
+      } else if (item is ArtistSong) {
+        _checkArtistSong(item);
+      }
+    }
+  }
+
+  static void _checkArtistSong(ArtistSong song) {
+    print('  Title: ${song.title}');
+    print('  Artists: ${song.artists}');
+    print('  Video ID: ${song.videoId}');
+    print('  Duration: ${song.duration ?? 'N/A'}');
+    print('  Artist Name: ${song.artistName}');
+
+    if (song.albumArt != null) {
+      print(
+        '  ✅ Album Art: Available (${AppSettings.thumbnailQuality.value} quality)',
+      );
+    } else {
+      print('  ❌ Album Art: Missing');
+    }
+
+    if (song.audioUrl != null) {
+      print(
+        '  ✅ Audio URL: Available (${AppSettings.audioQuality.value} quality)',
+      );
+    } else {
+      print('  ❌ Audio URL: Missing');
+    }
+    print('  ---');
+  }
+
+  static void _checkSearchResult(SearchResult result) {
+    print('  Title: ${result.title}');
+    print('  Artists: ${result.artists}');
+    print('  Video ID: ${result.videoId}');
+    print('  Duration: ${result.duration ?? 'N/A'}');
+    print('  Year: ${result.year ?? 'N/A'}');
+
+    if (result.albumArt != null) {
+      print(
+        '  ✅ Album Art: Available (${AppSettings.thumbnailQuality.value} quality)',
+      );
+    } else {
+      print('  ❌ Album Art: Missing');
+    }
+
+    if (result.audioUrl != null) {
+      print(
+        '  ✅ Audio URL: Available (${AppSettings.audioQuality.value} quality)',
+      );
+    } else {
+      print('  ❌ Audio URL: Missing');
+    }
+    print('  ---');
+  }
+
+  static void _checkRelatedSong(RelatedSong song) {
+    print('  Title: ${song.title}');
+    print('  Artists: ${song.artists}');
+    print('  Video ID: ${song.videoId}');
+    print('  Duration: ${song.duration ?? 'N/A'}');
+    print('  Is Original: ${song.isOriginal}');
+
+    if (song.albumArt != null) {
+      print(
+        '  ✅ Album Art: Available (${AppSettings.thumbnailQuality.value} quality)',
+      );
+    } else {
+      print('  ❌ Album Art: Missing');
+    }
+
+    if (song.audioUrl != null) {
+      print(
+        '  ✅ Audio URL: Available (${AppSettings.audioQuality.value} quality)',
+      );
+    } else {
+      print('  ❌ Audio URL: Missing');
+    }
+    print('  ---');
+  }
+}
+
+class MusicApiTestPage extends StatefulWidget {
+  @override
+  _MusicApiTestPageState createState() => _MusicApiTestPageState();
+}
+
+class _MusicApiTestPageState extends State<MusicApiTestPage> {
+  final YtFlutterMusicapi _api = YtFlutterMusicapi();
+  final List<String> _cliOutput = [];
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  bool _isInitialized = false;
+  bool _isLoading = false;
+  final List<ArtistSong> _songs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _addToCliOutput('🚀 YouTube Music API Test App Started');
+    _addToCliOutput('ℹ️  Use the buttons below to test API methods');
+    _addToCliOutput('⚙️  Configure settings using the gear icon');
+  }
+
+  void _addToCliOutput(String message) {
+    setState(() {
+      _cliOutput.add(
+        '${DateTime.now().toString().substring(11, 19)} | $message',
+      );
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _testStreamCancellation() async {
+    if (_isLoading || !_isInitialized) {
+      _addToCliOutput('❌ API not initialized or busy');
+      return;
+    }
+
+    if (AppSettings.mode != 'stream') {
+      _addToCliOutput('❌ This test only works in stream mode');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    // First search (will be cancelled after 10 seconds)
+    final firstQuery = 'Ed Sheeran Perfect';
+    _addToCliOutput('🔍 Starting first search: "$firstQuery"');
+    _addToCliOutput('⏳ Will cancel after 15 seconds...');
+
+    // Store first search results
+    final firstResults = <SearchResult>[];
+
+    // Start the first search
+    final firstSearchStream = _api.streamSearchResults(
+      query: firstQuery,
+      limit: AppSettings.limit,
+      audioQuality: AppSettings.audioQuality,
+      thumbQuality: AppSettings.thumbnailQuality,
+      includeAudioUrl: true,
+      includeAlbumArt: true,
+    );
+
+    final firstSearchSubscription = firstSearchStream.listen(
+      (result) {
+        firstResults.add(result);
+        _addToCliOutput('🎵 First search result: ${result.title}');
+        _addToCliOutput('   Artists: ${result.artists}');
+        _addToCliOutput('   Duration: ${result.duration ?? 'N/A'}');
+      },
+      onError: (e) {
+        _addToCliOutput('❌ First search error: $e');
+      },
+      onDone: () {
+        _addToCliOutput(
+          '✅ First search got ${firstResults.length} results before cancel',
+        );
+      },
+    );
+
+    // Second search (will start after 10 seconds)
+    final secondQuery = 'Jee Le Zara';
+    Future.delayed(Duration(seconds: 15), () async {
+      _addToCliOutput('\n⏰ Cancelling first search after 15 seconds');
+      await firstSearchSubscription.cancel();
+
+      // Print summary of first search results
+      if (firstResults.isNotEmpty) {
+        _addToCliOutput('📋 First search got ${firstResults.length} results:');
+        for (var result in firstResults) {
+          _addToCliOutput('   • ${result.title} (${result.duration ?? 'N/A'})');
+        }
+      } else {
+        _addToCliOutput('📋 First search got no results before cancellation');
+      }
+
+      _addToCliOutput('\n🚀 Starting second search: "$secondQuery"');
+
+      try {
+        int received = 0;
+        final stopwatch = Stopwatch()..start();
+
+        await for (final result in _api.streamSearchResults(
+          query: secondQuery,
+          limit: AppSettings.limit,
+          audioQuality: AppSettings.audioQuality,
+          thumbQuality: AppSettings.thumbnailQuality,
+          includeAudioUrl: true,
+          includeAlbumArt: true,
+        )) {
+          received++;
+          _addToCliOutput(
+            '\n🎧 Second search result $received in ${stopwatch.elapsedMilliseconds}ms:',
+          );
+          _addToCliOutput('   Title: ${result.title}');
+          _addToCliOutput('   Artists: ${result.artists}');
+          _addToCliOutput('   Duration: ${result.duration ?? 'N/A'}');
+          _addToCliOutput('   Video ID: ${result.videoId}');
+
+          if (received >= AppSettings.limit) {
+            _addToCliOutput('⏹️ Reached limit of ${AppSettings.limit} results');
+            break;
+          }
+        }
+
+        _addToCliOutput(
+          '\n✅ Second search finished: $received result(s) in ${stopwatch.elapsedMilliseconds}ms',
+        );
+        _addToCliOutput('\n✅ SearchStream Cancellation Did Its Job ✅');
+      } catch (e) {
+        _addToCliOutput('❌ Second search error: $e');
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    });
+  }
+  // Add these methods to your _MusicApiTestPageState class
+
+  Future<void> _getCharts() async {
+    if (_isLoading || !_isInitialized) {
+      _addToCliOutput('❌ API not initialized or busy');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    _addToCliOutput(
+      '📊 Getting charts for country: ${AppSettings.chartsCountry}',
+    );
+    _addToCliOutput(
+      '📊 Settings: Limit=${AppSettings.chartsLimit}, Audio=${AppSettings.audioQuality.value}, '
+      'Thumb=${AppSettings.thumbnailQuality.value}, Mode=${AppSettings.mode}',
+    );
+
+    try {
+      if (AppSettings.mode == 'stream') {
+        await _streamCharts();
+      } else {
+        final response = await _api.getCharts(
+          country: AppSettings.chartsCountry,
+          limit: AppSettings.chartsLimit,
+          audioQuality: AppSettings.audioQuality,
+          thumbQuality: AppSettings.thumbnailQuality,
+          includeAudioUrl: true,
+          includeAlbumArt: true,
+        );
+
+        if (response.success && response.data != null) {
+          _addToCliOutput('✅ Charts retrieved successfully');
+          _addToCliOutput('📋 Found ${response.data!.length} chart items');
+
+          for (int i = 0; i < response.data!.length; i++) {
+            final item = response.data![i];
+            _addToCliOutput('🏆 Chart Position ${i + 1}:');
+            _addToCliOutput('   Title: ${item.title}');
+            _addToCliOutput('   Artists: ${item.artists}');
+            _addToCliOutput('   Duration: ${item.duration ?? 'N/A'}');
+            _addToCliOutput('   Video ID: ${item.videoId}');
+            _addToCliOutput('   Rank: ${item.rank ?? 'N/A'}');
+            _addToCliOutput(
+              '   Album Art: ${item.albumArt != null ? 'Available' : 'N/A'}',
+            );
+            _addToCliOutput(
+              '   Audio URL: ${item.audioUrl != null ? 'Available' : 'N/A'}',
+            );
+            _addToCliOutput('   ---');
+          }
+
+          _addToCliOutput('🎉 SUCCESS: Charts operation completed');
+        } else {
+          _addToCliOutput('❌ Failed to get charts');
+          _addToCliOutput('📋 Error: ${response.error ?? 'Unknown error'}');
+        }
+      }
+    } catch (e) {
+      _addToCliOutput('❌ Exception during charts fetch: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _streamCharts() async {
+    int received = 0;
+    final stopwatch = Stopwatch()..start();
+
+    _addToCliOutput(
+      '📡 Streaming charts for country: ${AppSettings.chartsCountry}',
+    );
+
+    try {
+      await for (final item in _api.streamCharts(
+        country: AppSettings.chartsCountry,
+        limit: AppSettings.chartsLimit,
+        audioQuality: AppSettings.audioQuality,
+        thumbQuality: AppSettings.thumbnailQuality,
+        includeAudioUrl: true,
+        includeAlbumArt: true,
+      )) {
+        received++;
+        _addToCliOutput(
+          '🏆 Streamed Chart Item $received in ${stopwatch.elapsedMilliseconds}ms:',
+        );
+        _addToCliOutput('   Title: ${item.title}');
+        _addToCliOutput('   Artists: ${item.artists}');
+        _addToCliOutput('   Duration: ${item.duration ?? 'N/A'}');
+        _addToCliOutput('   Video ID: ${item.videoId}');
+        _addToCliOutput('   Rank: ${item.rank ?? 'N/A'}');
+        _addToCliOutput(
+          '   Album Art: ${item.albumArt != null ? 'Available' : 'N/A'}',
+        );
+        _addToCliOutput(
+          '   Audio URL: ${item.audioUrl != null ? 'Available' : 'N/A'}',
+        );
+        _addToCliOutput('   ---');
+
+        if (received >= AppSettings.chartsLimit) {
+          _addToCliOutput(
+            '⏹️ Streaming limit reached (${AppSettings.chartsLimit})',
+          );
+          break;
+        }
+
+        stopwatch.reset();
+      }
+
+      _addToCliOutput(
+        '✅ Charts stream finished: $received item(s) in ${stopwatch.elapsedMilliseconds}ms',
+      );
+    } catch (e) {
+      _addToCliOutput('❌ Charts streaming error: $e');
+    }
+  }
+
+  Future<void> _testRelatedSongsCancellation() async {
+    if (!_isInitialized) {
+      _addToCliOutput('⚠️ API not initialized - test will still run');
+    }
+
+    setState(() {
+      _isLoading = true;
+      _cliOutput.add(
+        '⏳ Starting Related Songs Cancellation Test (15s timeout)',
+      );
+    });
+
+    final firstSong = 'Perfect';
+    final firstArtist = 'Ed Sheeran';
+    final secondSong = 'Jee Le Zara';
+    final secondArtist = 'Tanishk Bagchi';
+    final timeout = Duration(seconds: 15);
+
+    // First stream
+    final firstResults = <RelatedSong>[];
+    final firstStream = _api.streamRelatedSongs(
+      songName: firstSong,
+      artistName: firstArtist,
+      limit: AppSettings.limit,
+      audioQuality: AppSettings.audioQuality,
+      thumbQuality: AppSettings.thumbnailQuality,
+      includeAudioUrl: true,
+      includeAlbumArt: true,
+    );
+
+    final firstSubscription = firstStream.listen(
+      (song) {
+        firstResults.add(song);
+        _addToCliOutput('🎵 (1st) ${song.title}');
+      },
+      onError: (e) => _addToCliOutput('❌ (1st) Error: $e'),
+      onDone: () => _addToCliOutput(
+        '✅ (1st) Completed with ${firstResults.length} songs',
+      ),
+    );
+
+    // Second stream after timeout
+    Future.delayed(timeout, () async {
+      await firstSubscription.cancel();
+      _addToCliOutput('\n⏰ (1st) Cancelled after ${timeout.inSeconds}s');
+
+      // Print first results summary
+      _addToCliOutput('📋 (1st) Results Summary:');
+      firstResults
+          .take(5)
+          .forEach((song) => _addToCliOutput('   • ${song.title}'));
+      if (firstResults.length > 5) {
+        _addToCliOutput('   ...and ${firstResults.length - 5} more');
+      }
+
+      // Start second stream
+      _addToCliOutput('\n🚀 (2nd) Starting for "$secondSong"');
+      final secondResults = <RelatedSong>[];
+
+      try {
+        int count = 0;
+        await for (final song in _api.streamRelatedSongs(
+          songName: secondSong,
+          artistName: secondArtist,
+          limit: AppSettings.limit,
+          audioQuality: AppSettings.audioQuality,
+          thumbQuality: AppSettings.thumbnailQuality,
+          includeAudioUrl: true,
+          includeAlbumArt: true,
+        )) {
+          count++;
+          secondResults.add(song);
+          _addToCliOutput('🎧 (2nd) $count: ${song.title}');
+          if (count >= AppSettings.limit) break;
+        }
+
+        // Print second results summary
+        _addToCliOutput('\n📋 (2nd) Results Summary:');
+        secondResults.forEach((song) => _addToCliOutput('   • ${song.title}'));
+      } catch (e) {
+        _addToCliOutput('❌ (2nd) Error: $e');
+      } finally {
+        setState(() => _isLoading = false);
+        _addToCliOutput('\n🏁 Test completed');
+        _addToCliOutput('\n✅ RelatedStream Cancellation Did Its Job ✅');
+      }
+    });
+  }
+
+  Future<void> _testArtistSongsCancellation() async {
+    if (!_isInitialized) {
+      _addToCliOutput('⚠️ API not initialized - test will still run');
+    }
+
+    setState(() {
+      _isLoading = true;
+      _cliOutput.add('⏳ Starting Artist Songs Cancellation Test (15s timeout)');
+    });
+
+    final firstArtist = 'Ed Sheeran';
+    final secondArtist = 'Arijit Singh';
+    final timeout = Duration(seconds: 15);
+
+    // First stream
+    final firstResults = <ArtistSong>[];
+    final firstStream = _api.streamArtistSongs(
+      artistName: firstArtist,
+      limit: AppSettings.limit,
+      audioQuality: AppSettings.audioQuality,
+      thumbQuality: AppSettings.thumbnailQuality,
+      includeAudioUrl: true,
+      includeAlbumArt: true,
+    );
+
+    final firstSubscription = firstStream.listen(
+      (song) {
+        firstResults.add(song);
+        _addToCliOutput('🎵 (1st) ${song.title}');
+      },
+      onError: (e) => _addToCliOutput('❌ (1st) Error: $e'),
+      onDone: () => _addToCliOutput(
+        '✅ (1st) Completed with ${firstResults.length} songs',
+      ),
+    );
+
+    // Second stream after timeout
+    Future.delayed(timeout, () async {
+      await firstSubscription.cancel();
+      _addToCliOutput('\n⏰ (1st) Cancelled after ${timeout.inSeconds}s');
+
+      // Print first results summary
+      _addToCliOutput('📋 (1st) Results Summary:');
+      firstResults
+          .take(5)
+          .forEach((song) => _addToCliOutput('   • ${song.title}'));
+      if (firstResults.length > 5) {
+        _addToCliOutput('   ...and 
