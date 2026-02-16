@@ -131,52 +131,55 @@ class FullPlayerView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: AnimationLimiter(
-        child: Stack(
-          children: AnimationConfiguration.toStaggeredList(
-            duration: const Duration(milliseconds: 375),
-            childAnimationBuilder: (widget) => SlideAnimation(
-              verticalOffset: 50.0,
-              child: FadeInAnimation(
-                child: widget,
-              ),
+      body: Stack(
+        children: [
+          // Background elements (not staggered)
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 750),
+              transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+              child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, isBackground: true),
             ),
-            children: [
-              Positioned.fill(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 750),
-                  transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                  child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, isBackground: true),
-                ),
-              ),
-              Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: () => context.read<MusicProvider>().collapsePlayer()),
+          ),
+          Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
+          
+          // Foreground elements (staggered)
+          AnimationLimiter(
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: AnimationConfiguration.staggeredList(
+                  position: 0,
+                  duration: const Duration(milliseconds: 375),
+                   child: SlideAnimation(
+                    verticalOffset: 50.0,
+                    child: FadeInAnimation(
+                      child: Column(
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: () => context.read<MusicProvider>().collapsePlayer()),
+                          ),
+                          const Spacer(),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 750),
+                            transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                            child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: 300),
+                          ),
+                          const SizedBox(height: 40),
+                          _SongInfoCard(mediaItem: mediaItem, audioHandler: audioHandler),
+                          const SizedBox(height: 20),
+                          _FullPlayerControls(audioHandler: audioHandler),
+                          const Spacer(),
+                        ],
                       ),
-                      const Spacer(),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 750),
-                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                        child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: 300),
-                      ),
-                      const SizedBox(height: 40),
-                      _SongInfoCard(mediaItem: mediaItem, audioHandler: audioHandler),
-                      const SizedBox(height: 20),
-                      _FullPlayerControls(audioHandler: audioHandler),
-                      const Spacer(),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
