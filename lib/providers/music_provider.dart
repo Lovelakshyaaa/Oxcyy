@@ -184,27 +184,25 @@ class MusicProvider with ChangeNotifier {
         includeAudioUrl: true,
         audioQuality: AudioQuality.high,
       )) {
-        if (result.resultType == 'song') {
-            Duration? songDuration;
-            if (result.duration is String) {
-                final parts = result.duration!.split(':');
-                if (parts.length == 2) {
-                    songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
-                }
+        Duration? songDuration;
+        if (result.duration is String) {
+            final parts = result.duration!.split(':');
+            if (parts.length == 2) {
+                songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
             }
-
-            final song = Song(
-                id: result.videoId,
-                title: result.title,
-                artist: result.artists, // artists is a String
-                thumbUrl: result.albumArt ?? '',
-                type: 'youtube',
-                duration: songDuration,
-                audioUrl: result.audioUrl,
-            );
-            _searchResults.add(song);
-            notifyListeners();
         }
+
+        final song = Song(
+            id: result.videoId,
+            title: result.title,
+            artist: result.artists, // artists is a String
+            thumbUrl: result.albumArt ?? '',
+            type: 'youtube',
+            duration: songDuration,
+            audioUrl: result.audioUrl,
+        );
+        _searchResults.add(song);
+        notifyListeners();
       }
     } catch (e) {
       print("Error searching YouTube: $e");
