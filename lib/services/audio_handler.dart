@@ -4,7 +4,6 @@ import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:rxdart/rxdart.dart';
-import '../utils/clients.dart';
 import 'dart:async';
 
 Future<AudioHandler> initAudioService() async {
@@ -23,54 +22,57 @@ Future<AudioHandler> initAudioService() async {
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
-  final ConcatenatingAudioSource _playlist = ConcatenatingAudioSource(children: []);
-
-  late final YoutubeExplode _youtubeVr;
-  late final YoutubeExplode _youtubeAndroid;
-
-  final _mediaItemStreamController = BehaviorSubject<MediaItem?>.seeded(null);
+  final _playlist = ConcatenatingAudioSource(children: []);
+  final _yt = YoutubeExplode();
 
   MyAudioHandler() {
-    _youtubeVr = YoutubeExplode(createAndroidVrClient());
-    _youtubeAndroid = YoutubeExplode(createAndroidClient());
     _init();
   }
 
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    await _player.setAudioSource(_playlist, preload: false);
 
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+
+    // Propagate all events from the audio player to AudioService clients.
     _player.sequenceStateStream.listen((sequenceState) {
-      final currentItem = sequenceState?.currentSource?.tag as MediaItem?;
-      if (currentItem != null) mediaItem.add(currentItem);
+      final mediaItem = sequenceState?.currentSource?.tag as MediaItem?;
+      if (mediaItem != null) {
+        this.mediaItem.add(mediaItem);
+      }
+      if (sequenceState != null) {
+        queue.add(sequenceState.sequence.map((s) => s.tag as MediaItem).toList());
+      }
     });
+
+    // Any errors from the audio player...
+    _player.playbackEventStream.listen((event) {}, onError: (Object e, StackTrace st) {
+      if (e is PlayerException) {
+        print('Error: ${e.message}');
+      } else {
+        print('An error occurred: $e');
+      }
+    });
+
+    await _player.setAudioSource(_playlist, preload: false);
   }
 
   Future<AudioSource> _createAudioSource(MediaItem item) async {
     if (item.genre == 'youtube') {
       try {
-        var manifest = await _youtubeVr.videos.streamsClient.getManifest(item.id);
+        var manifest = await _yt.videos.streamsClient.getManifest(item.extras!['id']);
         var url = manifest.audioOnly.withHighestBitrate().url;
         return AudioSource.uri(url, tag: item);
       } catch (e) {
-        print('VR client failed for ${item.id}, trying Android client...');
-        try {
-          var manifest = await _youtubeAndroid.videos.streamsClient.getManifest(item.id);
-          var url = manifest.audioOnly.withHighestBitrate().url;
-          return AudioSource.uri(url, tag: item);
-        } catch (e) {
-          print('Android client also failed for ${item.id}: $e');
-          throw Exception('Could not get stream URL for ${item.id}');
-        }
+        print('Error getting stream URL for ${item.id}: $e');
+        throw Exception('Could not get stream URL for ${item.id}');
       }
     } else {
       return AudioSource.uri(Uri.parse(item.id), tag: item);
     }
   }
 
-  // FIX: Implement the setRepeatMode method
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
     switch (repeatMode) {
@@ -85,7 +87,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _player.setLoopMode(LoopMode.all);
         break;
     }
-    // Broadcast the state change
     playbackState.add(playbackState.value.copyWith(repeatMode: repeatMode));
   }
 
@@ -94,17 +95,46 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       final source = await _createAudioSource(item);
       await _playlist.add(source);
-      queue.add(List.from(queue.value)..add(item));
+      final newQueue = queue.value..add(item);
+      queue.add(newQueue);
     } catch (e) {
       print("Error adding queue item: $e");
     }
   }
+  
+    @override
+  Future<void> playMediaItem(MediaItem mediaItem) async {
+    // If it's a YouTube video, we need to create a source with the fetched URL
+    if (mediaItem.genre == 'youtube') {
+      try {
+        final audioSource = await _createAudioSource(mediaItem);
+        // Stop current playback
+        await _player.stop();
+        // Clear the existing playlist
+        await _playlist.clear();
+        // Add the new source and play it
+        await _playlist.add(audioSource);
+        queue.add([mediaItem]);
+        await _player.play();
+      } catch (e) {
+        print("Error playing YouTube media item: $e");
+      }
+    } else {
+      // For local files, we can just play them by their ID (URI)
+      final index = queue.value.indexWhere((item) => item.id == mediaItem.id);
+      if (index != -1) {
+        await skipToQueueItem(index);
+        await play();
+      }
+    }
+  }
+
 
   @override
   Future<void> updateQueue(List<MediaItem> newQueue) async {
     try {
-      final audioSources = await Future.wait(newQueue.map(_createAudioSource));
       await _playlist.clear();
+      final audioSources = await Future.wait(newQueue.map(_createAudioSource));
       await _playlist.addAll(audioSources);
       queue.add(newQueue);
     } catch (e) {
@@ -136,9 +166,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> stop() async {
     await _player.stop();
-    _player.dispose();
-    _youtubeVr.close();
-    _youtubeAndroid.close();
+    await _player.dispose();
+    _yt.close();
     return super.stop();
   }
 
@@ -167,7 +196,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       bufferedPosition: _player.bufferedPosition,
       speed: _player.speed,
       queueIndex: event.currentIndex,
-      // FIX: Ensure repeatMode is included in the state
       repeatMode: const {
         LoopMode.off: AudioServiceRepeatMode.none,
         LoopMode.one: AudioServiceRepeatMode.one,

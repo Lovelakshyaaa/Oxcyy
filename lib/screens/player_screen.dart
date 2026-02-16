@@ -9,7 +9,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:animations/animations.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+
 
 class SmartPlayer extends StatefulWidget {
   const SmartPlayer({Key? key}) : super(key: key);
@@ -53,18 +54,26 @@ class _SmartPlayerState extends State<SmartPlayer> {
     return Selector<MusicProvider, bool>(
       selector: (_, provider) => provider.isPlayerExpanded,
       builder: (context, isPlayerExpanded, _) {
-        return PageTransitionSwitcher(
+        return AnimatedContainer(
           duration: const Duration(milliseconds: 300),
-          transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
-            return FadeThroughTransition(
-              animation: primaryAnimation,
-              secondaryAnimation: secondaryAnimation,
-              child: child,
-            );
-          },
-          child: isPlayerExpanded
-              ? FullPlayerView(key: const ValueKey('full'), mediaItem: _currentMediaItem!, audioHandler: audioHandler)
-              : MiniPlayerView(key: const ValueKey('mini'), mediaItem: _currentMediaItem!, audioHandler: audioHandler),
+          curve: Curves.easeInOut,
+          height: isPlayerExpanded ? MediaQuery.of(context).size.height : 70.0,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A2E),
+            borderRadius: isPlayerExpanded ? BorderRadius.zero : const BorderRadius.vertical(top: Radius.circular(16)),
+            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
+          ),
+          child: Stack(
+            children: [
+              MiniPlayerView(mediaItem: _currentMediaItem!, audioHandler: audioHandler),
+              if (isPlayerExpanded)
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 400),
+                  opacity: isPlayerExpanded ? 1.0 : 0.0,
+                  child: FullPlayerView(mediaItem: _currentMediaItem!, audioHandler: audioHandler),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -82,13 +91,8 @@ class MiniPlayerView extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.read<MusicProvider>().togglePlayerView(),
       child: Container(
-        height: 70,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
-          ),
+        color: Colors.transparent,
         child: Row(
           children: [
             ClipRRect(
@@ -126,42 +130,53 @@ class FullPlayerView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 750),
-              transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-              child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, isBackground: true),
-            ),
-          ),
-          Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: () => context.read<MusicProvider>().collapsePlayer()),
-                  ),
-                  const Spacer(),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 750),
-                    transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                    child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: 300),
-                  ),
-                  const SizedBox(height: 40),
-                  _SongInfoCard(mediaItem: mediaItem, audioHandler: audioHandler),
-                  const SizedBox(height: 20),
-                  _FullPlayerControls(audioHandler: audioHandler),
-                  const Spacer(),
-                ],
+      backgroundColor: Colors.transparent,
+      body: AnimationLimiter(
+        child: Stack(
+          children: AnimationConfiguration.toStaggeredList(
+            duration: const Duration(milliseconds: 375),
+            childAnimationBuilder: (widget) => SlideAnimation(
+              verticalOffset: 50.0,
+              child: FadeInAnimation(
+                child: widget,
               ),
             ),
+            children: [
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 750),
+                  transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                  child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, isBackground: true),
+                ),
+              ),
+              Positioned.fill(child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40), child: Container(color: Colors.black.withOpacity(0.6)))),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Column(
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 30), onPressed: () => context.read<MusicProvider>().collapsePlayer()),
+                      ),
+                      const Spacer(),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 750),
+                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                        child: _HighResArtwork(key: ValueKey(mediaItem.id), mediaItem: mediaItem, size: 300),
+                      ),
+                      const SizedBox(height: 40),
+                      _SongInfoCard(mediaItem: mediaItem, audioHandler: audioHandler),
+                      const SizedBox(height: 20),
+                      _FullPlayerControls(audioHandler: audioHandler),
+                      const Spacer(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -206,7 +221,7 @@ class _Artwork extends StatelessWidget {
   Widget _defaultArtwork({double? size}) => Container(width: size, height: size, color: Colors.grey[900], child: const Icon(Icons.music_note, color: Colors.white));
 }
 
-// FIX: Convert to StatefulWidget to prevent flicker
+
 class _HighResArtwork extends StatefulWidget {
   final MediaItem mediaItem;
   final double? size;
@@ -236,17 +251,22 @@ class __HighResArtworkState extends State<_HighResArtwork> {
   }
 
   Future<void> _fetchArtwork() async {
+    if (!mounted) return;
     final provider = context.read<MusicProvider>();
-    final albumId = widget.mediaItem.extras?['albumId'] as int?;
-    if (albumId == null) {
-      if (mounted) setState(() => _artworkData = null);
-      return;
+    dynamic albumId = widget.mediaItem.extras?['albumId'];
+
+    if (albumId is int) {
+        final data = await provider.getArtwork(albumId, ArtworkType.ALBUM);
+        if (mounted) {
+            setState(() => _artworkData = data);
+        }
+    } else {
+        if (mounted) {
+            setState(() => _artworkData = null); 
+        }
     }
-    final data = await provider.getArtwork(albumId, ArtworkType.ALBUM);
-    if (mounted) {
-      setState(() => _artworkData = data);
-    }
-  }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -264,8 +284,19 @@ class __HighResArtworkState extends State<_HighResArtwork> {
           image: DecorationImage(image: image, fit: BoxFit.cover, filterQuality: FilterQuality.high),
         ),
       );
+    } else if (widget.mediaItem.artUri != null) {
+       return CachedNetworkImage(
+        imageUrl: widget.mediaItem.artUri.toString(),
+        width: widget.size,
+        height: widget.size,
+        fit: BoxFit.cover,
+        useOldImageOnUrlChange: true,
+        fadeInDuration: const Duration(milliseconds: 300),
+        placeholder: (context, url) => _defaultArtwork(size: widget.size),
+        errorWidget: (_, __, ___) => _defaultArtwork(size: widget.size),
+      );
     }
-    // Show placeholder only if there's no artwork yet
+    
     return _defaultArtwork(size: widget.size);
   }
 

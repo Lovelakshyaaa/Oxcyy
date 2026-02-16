@@ -72,14 +72,7 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> _init() async {
-    _audioHandler = await AudioService.init(
-      builder: () => MyAudioHandler(),
-      config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.ryan.my_app.channel.audio',
-        androidNotificationChannelName: 'Audio playback',
-        androidNotificationOngoing: true,
-      ),
-    );
+    _audioHandler = await initAudioService();
     _audioHandler?.playbackState.listen((playbackState) {
       if (_repeatMode != playbackState.repeatMode) {
         _repeatMode = playbackState.repeatMode;
@@ -218,35 +211,25 @@ class MusicProvider with ChangeNotifier {
     if (_audioHandler == null) return;
 
     try {
-      MediaItem mediaItem;
+      final mediaItem = _songToMediaItem(song);
       if (song.type == 'youtube') {
-        var manifest = await _yt.videos.streamsClient.getManifest(song.id);
-        var streamUrl = manifest.audioOnly.withHighestBitrate().url.toString();
-        mediaItem = _songToMediaItem(song, streamUrl: streamUrl);
-        await _audioHandler!.addQueueItem(mediaItem);
-        await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
-
+         await (_audioHandler! as MyAudioHandler).playMediaItem(mediaItem);
       } else {
-        mediaItem = _songToMediaItem(song);
-        List<Song> queueToPlay;
+          List<Song> queueToPlay;
 
-        if (newQueue != null) {
-          queueToPlay = newQueue;
-          await _updateQueueWithSongs(queueToPlay);
-        } else {
-          queueToPlay = _isShuffleEnabled ? _shuffledSongs : _localSongs;
-        }
+          if (newQueue != null) {
+            queueToPlay = newQueue;
+            await _updateQueueWithSongs(queueToPlay);
+          } else {
+            queueToPlay = _isShuffleEnabled ? _shuffledSongs : _localSongs;
+          }
 
-        final index = queueToPlay.indexWhere((s) => s.id == song.id);
-        if (index != -1) {
-          await _audioHandler!.skipToQueueItem(index);
-        } else {
-          await _audioHandler!.addQueueItem(mediaItem);
-          await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
-        }
+          final index = queueToPlay.indexWhere((s) => s.id == song.id);
+          if (index != -1) {
+            await _audioHandler!.skipToQueueItem(index);
+          }
+           await _audioHandler!.play();
       }
-
-      _audioHandler!.play();
 
       if (!_isPlayerExpanded) {
         _isPlayerExpanded = true;
@@ -262,9 +245,9 @@ class MusicProvider with ChangeNotifier {
     await _audioHandler!.updateQueue(mediaItems);
   }
 
-  MediaItem _songToMediaItem(Song s, {String? streamUrl}) {
+  MediaItem _songToMediaItem(Song s) {
     return MediaItem(
-      id: s.type == 'youtube' ? streamUrl! : s.id,
+      id: s.id,
       album: s.type == 'local' ? "Local Music" : "YouTube",
       title: s.title,
       artist: s.artist,
@@ -274,6 +257,7 @@ class MusicProvider with ChangeNotifier {
       extras: {'artworkId': s.localId, 'albumId': s.albumId, 'id': s.id},
     );
   }
+
 
   void togglePlayPause() {
     if (_audioHandler?.playbackState.value.playing == true) {
