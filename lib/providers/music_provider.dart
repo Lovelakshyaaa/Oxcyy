@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart' as yt_music;
+import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
@@ -33,7 +33,7 @@ class Song {
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  final yt_music.YtMusicApi _yt = yt_music.YtMusicApi();
+  final YtFlutterMusicapi _yt = YtFlutterMusicapi();
 
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
@@ -72,6 +72,7 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> _init() async {
+    await _yt.initialize();
     _audioHandler = await initAudioService();
     _audioHandler?.playbackState.listen((playbackState) {
       if (_repeatMode != playbackState.repeatMode) {
@@ -330,7 +331,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    //_yt.close(); // YtMusicApi doesn't have a close method
+    _yt.close();
     super.dispose();
   }
 }

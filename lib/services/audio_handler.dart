@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart' as yt_music;
+import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
 import 'package:rxdart/rxdart.dart';
 import 'dart:async';
 
@@ -23,7 +23,7 @@ Future<AudioHandler> initAudioService() async {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
-  final _yt = yt_music.YtMusicApi();
+  final _yt = YtFlutterMusicapi();
 
   MyAudioHandler() {
     _init();
@@ -32,6 +32,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
+    await _yt.initialize();
 
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
@@ -166,6 +167,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> stop() async {
     await _player.stop();
     await _player.dispose();
+    _yt.close();
     return super.stop();
   }
 
