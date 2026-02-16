@@ -218,42 +218,32 @@ class MusicProvider with ChangeNotifier {
     if (_audioHandler == null) return;
 
     try {
-      String? streamUrl;
+      MediaItem mediaItem;
       if (song.type == 'youtube') {
         var manifest = await _yt.videos.streamsClient.getManifest(song.id);
-        streamUrl = manifest.audioOnly.withHighestBitrate().url.toString();
-      }
-
-      final mediaItem = _songToMediaItem(song).copyWith(extras: {
-        ...song.type == 'youtube' ? {'url': streamUrl} : {},
-        'artworkId': song.localId,
-        'albumId': song.albumId,
-      });
-
-      List<Song> queueToPlay;
-
-      if (newQueue != null) {
-        queueToPlay = newQueue;
-        await _updateQueueWithSongs(queueToPlay);
-      } else if (song.type == 'local') {
-        queueToPlay = _isShuffleEnabled ? _shuffledSongs : _localSongs;
-      } else {
+        var streamUrl = manifest.audioOnly.withHighestBitrate().url.toString();
+        mediaItem = _songToMediaItem(song, streamUrl: streamUrl);
         await _audioHandler!.addQueueItem(mediaItem);
         await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
-        _audioHandler!.play();
-        if (!_isPlayerExpanded) {
-          _isPlayerExpanded = true;
-          notifyListeners();
+
+      } else {
+        mediaItem = _songToMediaItem(song);
+        List<Song> queueToPlay;
+
+        if (newQueue != null) {
+          queueToPlay = newQueue;
+          await _updateQueueWithSongs(queueToPlay);
+        } else {
+          queueToPlay = _isShuffleEnabled ? _shuffledSongs : _localSongs;
         }
-        return;
-      }
 
-      final index = queueToPlay.indexWhere((s) => s.id == song.id);
-      if (index != -1) {
-        await _audioHandler!.skipToQueueItem(index);
-      } else {
-        await _audioHandler!.addQueueItem(mediaItem);
-        await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
+        final index = queueToPlay.indexWhere((s) => s.id == song.id);
+        if (index != -1) {
+          await _audioHandler!.skipToQueueItem(index);
+        } else {
+          await _audioHandler!.addQueueItem(mediaItem);
+          await _audioHandler!.skipToQueueItem(_audioHandler!.queue.value.length - 1);
+        }
       }
 
       _audioHandler!.play();
@@ -272,16 +262,16 @@ class MusicProvider with ChangeNotifier {
     await _audioHandler!.updateQueue(mediaItems);
   }
 
-  MediaItem _songToMediaItem(Song s) {
+  MediaItem _songToMediaItem(Song s, {String? streamUrl}) {
     return MediaItem(
-      id: s.id,
+      id: s.type == 'youtube' ? streamUrl! : s.id,
       album: s.type == 'local' ? "Local Music" : "YouTube",
       title: s.title,
       artist: s.artist,
       artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
       genre: s.type,
       duration: s.duration,
-      extras: {'artworkId': s.localId, 'albumId': s.albumId},
+      extras: {'artworkId': s.localId, 'albumId': s.albumId, 'id': s.id},
     );
   }
 

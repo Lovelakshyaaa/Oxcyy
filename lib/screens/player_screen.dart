@@ -54,13 +54,11 @@ class _SmartPlayerState extends State<SmartPlayer> {
       selector: (_, provider) => provider.isPlayerExpanded,
       builder: (context, isPlayerExpanded, _) {
         return PageTransitionSwitcher(
-          duration: const Duration(milliseconds: 500),
-          reverse: !isPlayerExpanded,
+          duration: const Duration(milliseconds: 300),
           transitionBuilder: (child, primaryAnimation, secondaryAnimation) {
-            return SharedAxisTransition(
+            return FadeThroughTransition(
               animation: primaryAnimation,
               secondaryAnimation: secondaryAnimation,
-              transitionType: SharedAxisTransitionType.vertical,
               child: child,
             );
           },
