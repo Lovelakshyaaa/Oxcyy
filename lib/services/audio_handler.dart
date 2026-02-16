@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
+import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart' as yt_music;
 import 'package:rxdart/rxdart.dart';
 import 'dart:async';
 
@@ -23,7 +23,7 @@ Future<AudioHandler> initAudioService() async {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
-  final _yt = YtMusicApi();
+  final _yt = yt_music.YtMusicApi();
 
   MyAudioHandler() {
     _init();
