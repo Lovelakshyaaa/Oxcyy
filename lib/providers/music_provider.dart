@@ -33,7 +33,7 @@ class Song {
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  final YtFlutterMusicapi _yt = YtFlutterMusicapi();
+  YtMusic? _yt;
 
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
@@ -72,7 +72,7 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> _init() async {
-    await _yt.initialize();
+    _yt = await YtFlutterMusicapi().initialize();
     _audioHandler = await initAudioService();
     _audioHandler?.playbackState.listen((playbackState) {
       if (_repeatMode != playbackState.repeatMode) {
@@ -183,37 +183,38 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> search(String query) async {
-    if (query.isEmpty) return;
+    if (query.isEmpty || _yt == null) return;
     _isSearching = true;
     _searchResults.clear();
     notifyListeners();
 
     try {
-      var searchResults = await _yt.search(query, filter: 'songs');
-      _searchResults = searchResults.map<Song>((v) {
-        String artistName = (v['artists'] as List?)?.map((a) => a['name'])?.join(', ') ?? 'Unknown';
-        String thumb = (v['thumbnails'] as List?)?.last?['url'] ?? '';
-        
-        Duration? songDuration;
-        if (v['duration'] is String) {
-          final parts = v['duration'].split(':');
-          if (parts.length == 2) {
-             songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
+      await for (final result in _yt!.streamSearchResults(query: query, filter: 'songs')) {
+          String artistName = (result['artists'] as List?)?.map((a) => a['name'])?.join(', ') ?? 'Unknown';
+          String thumb = (result['thumbnails'] as List?)?.last?['url'] ?? '';
+          
+          Duration? songDuration;
+          if (result['duration'] is String) {
+            final parts = result['duration'].split(':');
+            if (parts.length == 2) {
+                songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
+            }
+          } else if (result['duration_seconds'] is int) {
+            songDuration = Duration(seconds: result['duration_seconds']);
           }
-        } else if (v['duration_seconds'] is int) {
-           songDuration = Duration(seconds: v['duration_seconds']);
-        }
 
+          final song = Song(
+            id: result['videoId'],
+            title: result['title'],
+            artist: artistName,
+            thumbUrl: thumb,
+            type: 'youtube',
+            duration: songDuration,
+          );
 
-        return Song(
-          id: v['videoId'],
-          title: v['title'],
-          artist: artistName,
-          thumbUrl: thumb,
-          type: 'youtube',
-          duration: songDuration,
-        );
-      }).toList();
+          _searchResults.add(song);
+          notifyListeners();
+      }
     } catch (e) {
       print("Error searching YouTube: $e");
     } finally {
@@ -331,7 +332,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _yt.close();
+    _yt?.close();
     super.dispose();
   }
 }

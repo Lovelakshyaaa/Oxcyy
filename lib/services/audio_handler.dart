@@ -23,7 +23,7 @@ Future<AudioHandler> initAudioService() async {
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   final _playlist = ConcatenatingAudioSource(children: []);
-  final _yt = YtFlutterMusicapi();
+  YtMusic? _yt;
 
   MyAudioHandler() {
     _init();
@@ -32,7 +32,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> _init() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
-    await _yt.initialize();
+    _yt = await YtFlutterMusicapi().initialize();
 
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
@@ -62,7 +62,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<AudioSource> _createAudioSource(MediaItem item) async {
     if (item.genre == 'youtube') {
       try {
-        var url = await _yt.getAudioUrl(item.extras!['id']);
+        var url = await _yt!.getAudioUrl(item.extras!['id']);
         return AudioSource.uri(Uri.parse(url), tag: item);
       } catch (e) {
         print('Error getting stream URL for ${item.id}: $e');
@@ -167,7 +167,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> stop() async {
     await _player.stop();
     await _player.dispose();
-    _yt.close();
+    _yt?.close();
     return super.stop();
   }
 
