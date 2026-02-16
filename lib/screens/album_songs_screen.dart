@@ -56,6 +56,7 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                             key: const ValueKey<int>(1),
                             fit: BoxFit.cover,
                             gaplessPlayback: true,
+                            filterQuality: FilterQuality.high,
                           )
                         : Container(
                             key: const ValueKey<int>(2),
@@ -108,6 +109,7 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                                         height: 50,
                                         fit: BoxFit.cover,
                                         gaplessPlayback: true,
+                                        filterQuality: FilterQuality.high,
                                       );
                                     }
                                     return Container(

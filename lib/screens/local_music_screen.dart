@@ -96,6 +96,7 @@ class LocalMusicScreen extends StatelessWidget {
                                                     snapshot.data!,
                                                     fit: BoxFit.cover,
                                                     gaplessPlayback: true,
+                                                    filterQuality: FilterQuality.high,
                                                   );
                                                 }
                                                 return Container(
