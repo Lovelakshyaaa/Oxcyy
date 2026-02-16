@@ -10,11 +10,12 @@ import 'package:oxcy/services/audio_handler.dart';
 
 // Represents a single song, abstracting over local and YouTube sources.
 class Song {
-  final String id;
+  final String id; // videoId for YouTube, file URI for local
   final String title;
   final String artist;
   final String thumbUrl;
   final String type;
+  final String? audioUrl; // Playable URL for YouTube songs
   final int? localId;
   final int? albumId;
   final Duration? duration;
@@ -25,6 +26,7 @@ class Song {
     required this.artist,
     required this.thumbUrl,
     required this.type,
+    this.audioUrl,
     this.localId,
     this.albumId,
     this.duration,
@@ -34,7 +36,7 @@ class Song {
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  YtFlutterMusicapi? _yt;
+  final YtFlutterMusicapi _yt = YtFlutterMusicapi();
 
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
@@ -73,7 +75,7 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> _init() async {
-    _yt = await YtFlutterMusicapi().initialize();
+    await _yt.initialize();
     _audioHandler = await initAudioService();
     _audioHandler?.playbackState.listen((playbackState) {
       if (_repeatMode != playbackState.repeatMode) {
@@ -161,47 +163,48 @@ class MusicProvider with ChangeNotifier {
         .toList();
   }
 
-  // Caching enabled for lossless artwork
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
     final String cacheKey = '${type.toString()}_$id';
+    if (_artworkCache.containsKey(cacheKey)) return _artworkCache[cacheKey];
 
-    if (_artworkCache.containsKey(cacheKey)) {
-      return _artworkCache[cacheKey];
-    }
-
-    final Uint8List? artwork = await _audioQuery.queryArtwork(
-      id,
-      type,
-      format: ArtworkFormat.PNG, // Ensures original, lossless quality
-      size: 2048, // Request high resolution
-    );
-
-    if (artwork != null) {
-      _artworkCache[cacheKey] = artwork;
-    }
-
+    final Uint8List? artwork = await _audioQuery.queryArtwork(id, type, format: ArtworkFormat.PNG, size: 2048);
+    if (artwork != null) _artworkCache[cacheKey] = artwork;
     return artwork;
   }
 
   Future<void> search(String query) async {
-    if (query.isEmpty || _yt == null) return;
+    if (query.isEmpty) return;
     _isSearching = true;
     _searchResults.clear();
     notifyListeners();
 
     try {
-      await for (final SearchResult result in _yt!.streamSearchResults(query: query, filter: 'songs')) {
-          final song = Song(
-            id: result.videoId,
-            title: result.title,
-            artist: result.artists.join(', '),
-            thumbUrl: result.albumArt ?? '',
-            type: 'youtube',
-            duration: result.duration,
-          );
+      await for (final SearchResult result in _yt.streamSearchResults(
+        query: query,
+        includeAudioUrl: true,
+        audioQuality: AudioQuality.high,
+      )) {
+        if (result.resultType == 'song') {
+            Duration? songDuration;
+            if (result.duration is String) {
+                final parts = result.duration!.split(':');
+                if (parts.length == 2) {
+                    songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
+                }
+            }
 
-          _searchResults.add(song);
-          notifyListeners();
+            final song = Song(
+                id: result.videoId,
+                title: result.title,
+                artist: result.artists, // artists is a String
+                thumbUrl: result.albumArt ?? '',
+                type: 'youtube',
+                duration: songDuration,
+                audioUrl: result.audioUrl,
+            );
+            _searchResults.add(song);
+            notifyListeners();
+        }
       }
     } catch (e) {
       print("Error searching YouTube: $e");
@@ -216,23 +219,22 @@ class MusicProvider with ChangeNotifier {
 
     try {
       final mediaItem = _songToMediaItem(song);
+      
       if (song.type == 'youtube') {
+         // For youtube, we just play the single item
          await (_audioHandler! as MyAudioHandler).playMediaItem(mediaItem);
       } else {
-          List<Song> queueToPlay;
-
+          // For local files, we manage the queue
+          List<Song> queueToPlay = newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
           if (newQueue != null) {
-            queueToPlay = newQueue;
             await _updateQueueWithSongs(queueToPlay);
-          } else {
-            queueToPlay = _isShuffleEnabled ? _shuffledSongs : _localSongs;
           }
-
+          
           final index = queueToPlay.indexWhere((s) => s.id == song.id);
           if (index != -1) {
             await _audioHandler!.skipToQueueItem(index);
+            await _audioHandler!.play();
           }
-           await _audioHandler!.play();
       }
 
       if (!_isPlayerExpanded) {
@@ -245,30 +247,30 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> _updateQueueWithSongs(List<Song> songs) async {
-    final mediaItems = songs.map((s) => _songToMediaItem(s)).toList();
+    final mediaItems = songs.map(_songToMediaItem).toList();
     await _audioHandler!.updateQueue(mediaItems);
   }
 
   MediaItem _songToMediaItem(Song s) {
+    // The ID for MediaItem MUST be the playable URI.
+    // For local songs, it's the file path (s.id).
+    // For YouTube songs, it's the fetched audio URL (s.audioUrl).
+    String playableId = (s.type == 'youtube') ? (s.audioUrl ?? '') : s.id;
+
     return MediaItem(
-      id: s.id,
+      id: playableId,
       album: s.type == 'local' ? "Local Music" : "YouTube",
       title: s.title,
       artist: s.artist,
       artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
       genre: s.type,
       duration: s.duration,
-      extras: {'artworkId': s.localId, 'albumId': s.albumId, 'id': s.id},
+      extras: {'artworkId': s.localId, 'albumId': s.albumId, 'videoId': s.id},
     );
   }
 
-
   void togglePlayPause() {
-    if (_audioHandler?.playbackState.value.playing == true) {
-      _audioHandler!.pause();
-    } else {
-      _audioHandler!.play();
-    }
+    _audioHandler?.playbackState.value.playing == true ? _audioHandler!.pause() : _audioHandler!.play();
   }
 
   void next() => _audioHandler?.skipToNext();
@@ -320,7 +322,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _yt?.close();
+    // No close method on the api object
     super.dispose();
   }
 }
