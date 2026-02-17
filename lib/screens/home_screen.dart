@@ -37,13 +37,16 @@ class HomeScreen extends StatelessWidget {
             ),
             
             Expanded(
-              child: provider.searchResults.isEmpty
+              child: provider.isSearching
+                  ? Center(child: CircularProgressIndicator(color: Colors.purpleAccent))
+                  : provider.searchResults.isEmpty
                   ? Center(child: Icon(Icons.search, size: 80, color: Colors.white10))
                   : ListView.builder(
                       padding: EdgeInsets.only(bottom: 100),
                       itemCount: provider.searchResults.length,
                       itemBuilder: (context, index) {
                         final song = provider.searchResults[index];
+                        final isLoading = provider.loadingSongId == song.id;
                         return ListTile(
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
@@ -51,7 +54,10 @@ class HomeScreen extends StatelessWidget {
                           ),
                           title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white)),
                           subtitle: Text(song.artist, style: TextStyle(color: Colors.white54)),
-                          onTap: () => provider.play(song),
+                          trailing: isLoading 
+                            ? CircularProgressIndicator(color: Colors.purpleAccent)
+                            : null,
+                          onTap: isLoading ? null : () => provider.play(song),
                         );
                       },
                     ),

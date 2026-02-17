@@ -13,19 +13,6 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
-// FIX: This block forces the correct Python path on all sub-modules.
-// It's necessary to override the hardcoded Windows path in the 
-// 'yt_flutter_musicapi' dependency that has been causing the build to fail.
-subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty('chaquopy')) {
-            project.chaquopy {
-                buildPython = "python3"
-            }
-        }
-    }
-}
-
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

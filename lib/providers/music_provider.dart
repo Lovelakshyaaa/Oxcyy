@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:yt_flutter_musicapi/yt_flutter_musicapi.dart';
-import 'package:yt_flutter_musicapi/models/searchModel.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
@@ -36,7 +35,7 @@ class Song {
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  final YtFlutterMusicapi _yt = YtFlutterMusicapi();
+  final YoutubeExplode _yt = YoutubeExplode();
 
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
@@ -58,6 +57,10 @@ class MusicProvider with ChangeNotifier {
   bool _isSearching = false;
   bool get isSearching => _isSearching;
 
+  // NEW: Keep track of which song is currently being loaded.
+  String? _loadingSongId;
+  String? get loadingSongId => _loadingSongId;
+
   bool _isFetchingLocal = true;
   bool get isFetchingLocal => _isFetchingLocal;
 
@@ -75,7 +78,6 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<void> _init() async {
-    await _yt.initialize();
     _audioHandler = await initAudioService();
     _audioHandler?.playbackState.listen((playbackState) {
       if (_repeatMode != playbackState.repeatMode) {
@@ -179,31 +181,19 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      await for (final SearchResult result in _yt.streamSearchResults(
-        query: query,
-        includeAudioUrl: true,
-        audioQuality: AudioQuality.high,
-      )) {
-        Duration? songDuration;
-        if (result.duration is String) {
-            final parts = result.duration!.split(':');
-            if (parts.length == 2) {
-                songDuration = Duration(minutes: int.parse(parts[0]), seconds: int.parse(parts[1]));
-            }
-        }
-
-        final song = Song(
-            id: result.videoId,
-            title: result.title,
-            artist: result.artists, // artists is a String
-            thumbUrl: result.albumArt ?? '',
-            type: 'youtube',
-            duration: songDuration,
-            audioUrl: result.audioUrl,
-        );
-        _searchResults.add(song);
-        notifyListeners();
+      final searchResult = await _yt.search.search(query);
+      final List<Song> songs = [];
+      for (var video in searchResult) {
+        songs.add(Song(
+          id: video.id.value,
+          title: video.title,
+          artist: video.author,
+          thumbUrl: video.thumbnails.highResUrl,
+          type: 'youtube',
+          duration: video.duration,
+        ));
       }
+      _searchResults = songs;
     } catch (e) {
       print("Error searching YouTube: $e");
     } finally {
@@ -216,11 +206,18 @@ class MusicProvider with ChangeNotifier {
     if (_audioHandler == null) return;
 
     try {
-      final mediaItem = _songToMediaItem(song);
-      
       if (song.type == 'youtube') {
-         // For youtube, we just play the single item
-         await (_audioHandler! as MyAudioHandler).playMediaItem(mediaItem);
+        // Start loading
+        _loadingSongId = song.id;
+        notifyListeners();
+
+        var manifest = await _yt.videos.streamsClient.getManifest(song.id);
+        var streamInfo = manifest.audioOnly.withHighestBitrate();
+        String audioUrl = streamInfo.url.toString();
+
+        final mediaItem = _songToMediaItem(song, audioUrl: audioUrl);
+        await (_audioHandler! as MyAudioHandler).playMediaItem(mediaItem);
+
       } else {
           // For local files, we manage the queue
           List<Song> queueToPlay = newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
@@ -241,19 +238,25 @@ class MusicProvider with ChangeNotifier {
       }
     } catch (e) {
       print("Error playing song: $e");
+    } finally {
+       if (song.type == 'youtube') {
+        // Stop loading
+        _loadingSongId = null;
+        notifyListeners();
+       }
     }
   }
 
   Future<void> _updateQueueWithSongs(List<Song> songs) async {
-    final mediaItems = songs.map(_songToMediaItem).toList();
+    final mediaItems = songs.map((s) => _songToMediaItem(s)).toList();
     await _audioHandler!.updateQueue(mediaItems);
   }
 
-  MediaItem _songToMediaItem(Song s) {
+  MediaItem _songToMediaItem(Song s, {String? audioUrl}) {
     // The ID for MediaItem MUST be the playable URI.
     // For local songs, it's the file path (s.id).
-    // For YouTube songs, it's the fetched audio URL (s.audioUrl).
-    String playableId = (s.type == 'youtube') ? (s.audioUrl ?? '') : s.id;
+    // For YouTube songs, it's the fetched audio URL.
+    String playableId = (s.type == 'youtube') ? (audioUrl ?? s.audioUrl ?? '') : s.id;
 
     return MediaItem(
       id: playableId,
@@ -320,7 +323,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    // No close method on the api object
+    _yt.close();
     super.dispose();
   }
 }

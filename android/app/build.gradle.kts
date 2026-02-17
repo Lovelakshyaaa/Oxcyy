@@ -3,22 +3,42 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.chaquo.python")
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+if (flutterVersionCode == null) {
+    flutterVersionCode = "1"
+}
+
+def flutterVersionName = localProperties.getProperty("flutter.versionName")
+if (flutterVersionName == null) {
+    flutterVersionName = "1.0"
 }
 
 android {
     namespace = "com.example.oxcy"
-    // FIX 1: Force SDK 34 so permissions work
     compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "1.8"
+    }
+
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
     }
 
     defaultConfig {
@@ -26,17 +46,10 @@ android {
         applicationId = "com.example.oxcy"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        
-        // FIX 2: Bump to 24 (Required for robust audio)
-        minSdk = 24
-        // FIX 3: Force Target 34
+        minSdk = 21
         targetSdk = 34
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
-        }
+        versionCode = flutterVersionCode.toInteger()
+        versionName = flutterVersionName
     }
 
     buildTypes {
@@ -46,17 +59,6 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-
-    // FIX 4: Packaging options to fix build errors
-    packagingOptions {
-        exclude("META-INF/DEPENDENCIES")
-    }
-}
-
-// FIX 5: Python version for Chaquopy
-chaquopy {
-    version = "3.11"
-    buildPython = "python3"
 }
 
 flutter {

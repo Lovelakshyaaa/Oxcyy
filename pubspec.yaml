@@ -40,10 +40,6 @@ dependencies:
     git:
       url: https://github.com/HemantKArya/youtube_explode_dart.git
       ref: master
-  yt_flutter_musicapi:
-    git:
-      url: https://github.com/golanpiyush/yt_flutter_musicapi.git
-      ref: main
 
 dev_dependencies:
   flutter_test:

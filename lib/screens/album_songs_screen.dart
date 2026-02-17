@@ -89,6 +89,7 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final song = songsInAlbum[index];
+                      final isLoading = musicProvider.loadingSongId == song.id;
                       return AnimationConfiguration.staggeredList(
                         position: index,
                         duration: const Duration(milliseconds: 375),
@@ -123,7 +124,10 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                               ),
                               title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w500)),
                               subtitle: Text(song.artist ?? "Unknown Artist", maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 13)),
-                              onTap: () {
+                              trailing: isLoading
+                                ? const CircularProgressIndicator(color: Colors.purpleAccent)
+                                : null,
+                              onTap: isLoading ? null : () {
                                 musicProvider.play(song, newQueue: songsInAlbum);
                                 Navigator.pop(context);
                               },
