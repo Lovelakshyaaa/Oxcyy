@@ -5,8 +5,9 @@ import 'package:just_audio/just_audio.dart';
 // This is necessary for handling streams from sources like YouTube where URLs are temporary.
 class MyBytesAudioSource extends StreamAudioSource {
   final Uint8List _buffer;
+  final String contentType;
 
-  MyBytesAudioSource(this._buffer, {required dynamic tag}) : super(tag: tag);
+  MyBytesAudioSource(this._buffer, {required this.contentType, required dynamic tag}) : super(tag: tag);
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {
@@ -19,7 +20,7 @@ class MyBytesAudioSource extends StreamAudioSource {
       contentLength: end - start,
       offset: start,
       stream: Stream.value(_buffer.sublist(start, end)),
-      contentType: 'audio/webm', // YouTube audio is often in webm format
+      contentType: contentType, // Use the dynamic content type
     );
   }
 }

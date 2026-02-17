@@ -1,8 +1,7 @@
-import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:oxcy/services/my_bytes_audio_source.dart';
+import 'package:oxcy/services/youtube_audio_source.dart';
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -45,8 +44,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     _player.playbackEventStream.listen((event) {},
         onError: (Object e, StackTrace st) {
-      if (e is PlayerException) print('Player Error: ${e.message}');
-      else print('An error occurred: $e');
+      print('Player Error: $e');
     });
 
     try {
@@ -56,27 +54,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
-  AudioSource _createAudioSource(MediaItem item) {
-    return AudioSource.uri(Uri.parse(item.id), tag: item);
-  }
-
-  // Plays a single YouTube track from a byte stream by creating a temporary, single-item playlist.
-  Future<void> playYoutubeStream(MediaItem item, Uint8List bytes) async {
-    try {
-      final audioSource = MyBytesAudioSource(bytes, tag: item);
-
-      // Stop any current playback and clear the playlist.
-      await _player.stop();
-      await _playlist.clear();
-
-      // Add only the YouTube song to the playlist.
-      await _playlist.add(audioSource);
-      queue.add([item]); // Update the UI queue to match.
-
-      // Start playing the new single-item playlist.
-      await _player.play();
-    } catch (e) {
-      print("Error playing YouTube stream: $e");
+  Future<AudioSource> _createAudioSource(MediaItem item) async {
+    if (item.genre == 'youtube') {
+      return await YoutubeAudioSource.create(item.id, tag: item);
+    } else {
+      return AudioSource.uri(Uri.parse(item.id), tag: item);
     }
   }
 
@@ -85,12 +67,26 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     try {
       await _player.stop();
       await _playlist.clear();
-      final audioSources = newQueue.map(_createAudioSource).toList();
+      final audioSources = await Future.wait(newQueue.map(_createAudioSource).toList());
       await _playlist.addAll(audioSources);
       queue.add(newQueue);
     } catch (e) {
       print("Error updating queue: $e");
     }
+  }
+
+  @override
+  Future<void> playMediaItem(MediaItem mediaItem) async {
+      try {
+        await _player.stop();
+        await _playlist.clear();
+        final source = await _createAudioSource(mediaItem);
+        await _playlist.add(source);
+        queue.add([mediaItem]);
+        await _player.play();
+      } catch (e) {
+        print("Error playing media item: $e");
+      }
   }
 
   @override

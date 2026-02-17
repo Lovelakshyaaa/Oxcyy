@@ -208,7 +208,7 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
- Future<void> play(Song song, {List<Song>? newQueue}) async {
+  Future<void> play(Song song, {List<Song>? newQueue}) async {
     if (_audioHandler == null) return;
 
     try {
@@ -216,59 +216,34 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
 
       if (song.type == 'youtube') {
-        var manifest = await _yt.videos.streamsClient.getManifest(song.id);
-        var streamInfo = manifest.audioOnly.withHighestBitrate();
-        
-        // Get the actual byte stream and convert it to Uint8List
-        var stream = _yt.videos.streamsClient.get(streamInfo);
-        var completer = Completer<Uint8List>();
-        var builder = BytesBuilder();
-        stream.listen(
-          builder.add,
-          onError: completer.completeError,
-          onDone: () => completer.complete(builder.toBytes()),
-        );
-        final bytes = await completer.future;
-
         final mediaItem = _songToMediaItem(song);
-        await (_audioHandler! as MyAudioHandler).playYoutubeStream(mediaItem, bytes);
-
+        await _audioHandler!.playMediaItem(mediaItem);
       } else {
-          // This is the original, untouched logic for local music.
-          List<Song> queueToPlay = newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
-          if (newQueue != null) {
-            await _updateQueueWithSongs(queueToPlay);
-          }
-          
-          final index = queueToPlay.indexWhere((s) => s.id == song.id);
-          if (index != -1) {
-            await _audioHandler!.skipToQueueItem(index);
-            await _audioHandler!.play();
-          }
+        List<Song> queueToPlay = newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
+        // If we are playing a song from an album, the queue needs to be updated first.
+        if (newQueue != null) {
+          await _updateQueueWithSongs(queueToPlay);
+        }
+
+        final index = queueToPlay.indexWhere((s) => s.id == song.id);
+        if (index != -1) {
+          await _audioHandler!.skipToQueueItem(index);
+          await _audioHandler!.play();
+        }
       }
 
       if (!_isPlayerExpanded) {
         _isPlayerExpanded = true;
       }
-    } catch (e, s) {
-      print("--- DETAILED PLAYBACK ERROR ---");
-      print(e);
-      print(s);
-      print("---------------------------------");
-
-      if (e is VideoUnplayableException) {
-        _errorMessage = "Video is unplayable.";
-      } else if (e is VideoUnavailableException) {
-        _errorMessage = "Video is unavailable.";
-      } else {
-        _errorMessage = "Failed to fetch audio stream.";
-      }
-
+    } catch (e) {
+      print("Error in play method: $e");
+      _errorMessage = "Failed to start playback.";
     } finally {
-       _loadingSongId = null;
-       notifyListeners();
+      _loadingSongId = null;
+      notifyListeners();
     }
   }
+
 
   Future<void> _updateQueueWithSongs(List<Song> songs) async {
     final mediaItems = songs.map((s) => _songToMediaItem(s)).toList();
@@ -277,7 +252,7 @@ class MusicProvider with ChangeNotifier {
 
   MediaItem _songToMediaItem(Song s) {
     return MediaItem(
-      id: s.id, // The ID is now the YouTube video ID or the local file URI
+      id: s.id, 
       album: s.type == 'local' ? "Local Music" : "YouTube",
       title: s.title,
       artist: s.artist,
