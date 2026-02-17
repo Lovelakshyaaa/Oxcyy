@@ -1,3 +1,4 @@
+import 'dart:convert'; // Import the dart:convert library
 import 'package:flutter/services.dart';
 import 'package:flutter_js/flutter_js.dart';
 
@@ -21,7 +22,6 @@ class DecipherService {
       final meriyah = await rootBundle.loadString('knowledge/meriyah-6.1.4.min.js');
       final solver = await rootBundle.loadString('knowledge/yt.solver.core.js');
 
-      // The evaluate method expects a simple String.
       _jsRuntime.evaluate(polyfill);
       _jsRuntime.evaluate(astring);
       _jsRuntime.evaluate(meriyah);
@@ -44,8 +44,10 @@ class DecipherService {
     }
 
     try {
-      // The evaluate method expects a simple String.
-      final result = _jsRuntime.evaluate('solveN("$signature")');
+      // *** THE CRITICAL FIX ***
+      // Use jsonEncode to safely pass the string to the JavaScript context.
+      // This prevents syntax errors if the signature contains special characters.
+      final result = _jsRuntime.evaluate('solveN(${jsonEncode(signature)})');
       return result.stringResult;
     } catch (e) {
       print("Failed to decipher signature: $e");
