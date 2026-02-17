@@ -19,26 +19,20 @@ class YoutubeAudioSource extends UriAudioSource {
     // Get the stream manifest.
     final manifest = await _yt.videos.streamsClient.getManifest(videoId);
     
-    // Choose the best audio-only stream.
-    var streamInfo = manifest.audioOnly.withHighestBitrate();
+    // Use the general StreamInfo class to access the necessary properties.
+    StreamInfo streamInfo = manifest.audioOnly.withHighestBitrate();
 
     Uri streamUri;
     if (streamInfo.isCiphered) {
       // The stream is protected, we need to decipher the signature.
       final decipheredSignature = await _decipherService.decipher(streamInfo.signature);
-      streamUri = streamInfo.uri.replace(queryParameters: {'n': decipheredSignature});
+      streamUri = streamInfo.url.replace(queryParameters: {'n': decipheredSignature});
     } else {
       // The stream is not protected, we can use the URL directly.
-      streamUri = streamInfo.uri;
+      streamUri = streamInfo.url;
     }
 
     return YoutubeAudioSource._(streamUri, tag: tag);
-  }
-
-  @override
-  Future<StreamAudioResponse> request([int? start, int? end]) async {
-    // The UriAudioSource will handle the streaming from the resolved URL.
-    return super.request(start, end);
   }
 
   // It's good practice to provide a way to close the services.
