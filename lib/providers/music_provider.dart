@@ -59,7 +59,6 @@ class MusicProvider with ChangeNotifier {
   String? _loadingSongId;
   String? get loadingSongId => _loadingSongId;
 
-  // NEW: For error handling with toasts
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
@@ -90,7 +89,6 @@ class MusicProvider with ChangeNotifier {
     fetchLocalMusic();
   }
 
-  // NEW: Method to clear error message after showing it
   void clearError() {
     _errorMessage = null;
   }
@@ -243,8 +241,22 @@ class MusicProvider with ChangeNotifier {
       if (!_isPlayerExpanded) {
         _isPlayerExpanded = true;
       }
-    } catch (e) {
-      _errorMessage = "Error playing stream. Please try again.";
+    } catch (e, s) {
+      // Log the full error and stack trace to the console for debugging.
+      print("--- DETAILED PLAYBACK ERROR ---");
+      print(e);
+      print(s);
+      print("---------------------------------");
+
+      // Set a more informative error message for the user's toast notification.
+      if (e is VideoUnplayableException) {
+        _errorMessage = "Video is unplayable.";
+      } else if (e is VideoUnavailableException) {
+        _errorMessage = "Video is unavailable.";
+      } else {
+        _errorMessage = "Failed to fetch audio stream.";
+      }
+
     } finally {
        _loadingSongId = null;
        notifyListeners();
