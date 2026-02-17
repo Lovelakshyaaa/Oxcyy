@@ -107,10 +107,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
-    if (shuffleMode == AudioServiceShuffleMode.all) {
+    final enabled = shuffleMode == AudioServiceShuffleMode.all;
+    await _player.setShuffleModeEnabled(enabled);
+    if (enabled) {
       await _player.shuffle();
-    } else {
-      await _player.setShuffleOrder(UnshuffledAudioSource.identity());
     }
     playbackState.add(playbackState.value.copyWith(shuffleMode: shuffleMode));
   }
