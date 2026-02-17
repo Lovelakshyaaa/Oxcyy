@@ -56,6 +56,7 @@ android {
 // FIX 5: Python version for Chaquopy
 chaquopy {
     version = "3.11"
+    buildPython = "python3"
 }
 
 flutter {
