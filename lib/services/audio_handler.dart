@@ -82,13 +82,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   void _listenToMediaKitPlayerStates() {
-    // Listen for media item changes in media_kit (for duration and metadata)
-    _mediaKitPlayer.stream.playlist.listen((playlist) {
-      if (_activePlayer == 'media_kit' && playlist.medias.isNotEmpty) {
-        final currentMedia = playlist.medias.first;
+    // Listen for the duration to become available and update the MediaItem.
+    _mediaKitPlayer.stream.duration.listen((duration) {
+      if (_activePlayer == 'media_kit') {
         final currentMediaItem = mediaItem.value;
-        if (currentMediaItem != null) {
-          mediaItem.add(currentMediaItem.copyWith(duration: currentMedia.duration));
+        if (currentMediaItem != null && currentMediaItem.duration != duration) {
+          mediaItem.add(currentMediaItem.copyWith(duration: duration));
         }
       }
     });
