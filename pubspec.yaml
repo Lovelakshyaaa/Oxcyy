@@ -25,6 +25,7 @@ dependencies:
   fluentui_system_icons: ^1.1.225
   animations: ^2.1.1
   flutter_staggered_animations: ^1.1.1
+  fluttertoast: ^8.2.6
 
   # STATE
   provider: ^6.1.5+1

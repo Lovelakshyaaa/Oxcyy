@@ -40,7 +40,6 @@ class MusicProvider with ChangeNotifier {
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
 
-  // Artwork Caching
   final Map<String, Uint8List> _artworkCache = {};
 
   List<Song> _searchResults = [];
@@ -57,9 +56,12 @@ class MusicProvider with ChangeNotifier {
   bool _isSearching = false;
   bool get isSearching => _isSearching;
 
-  // NEW: Keep track of which song is currently being loaded.
   String? _loadingSongId;
   String? get loadingSongId => _loadingSongId;
+
+  // NEW: For error handling with toasts
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
 
   bool _isFetchingLocal = true;
   bool get isFetchingLocal => _isFetchingLocal;
@@ -86,6 +88,11 @@ class MusicProvider with ChangeNotifier {
       }
     });
     fetchLocalMusic();
+  }
+
+  // NEW: Method to clear error message after showing it
+  void clearError() {
+    _errorMessage = null;
   }
 
   Future<void> fetchLocalMusic() async {
@@ -131,6 +138,8 @@ class MusicProvider with ChangeNotifier {
       }
     } catch (e) {
       print("Error fetching local music: $e");
+       _errorMessage = "Error fetching local music.";
+       notifyListeners();
     } finally {
       _isFetchingLocal = false;
       notifyListeners();
@@ -195,7 +204,8 @@ class MusicProvider with ChangeNotifier {
       }
       _searchResults = songs;
     } catch (e) {
-      print("Error searching YouTube: $e");
+       _errorMessage = "Failed to get search results.";
+       notifyListeners();
     } finally {
       _isSearching = false;
       notifyListeners();
@@ -207,7 +217,6 @@ class MusicProvider with ChangeNotifier {
 
     try {
       if (song.type == 'youtube') {
-        // Start loading
         _loadingSongId = song.id;
         notifyListeners();
 
@@ -219,7 +228,6 @@ class MusicProvider with ChangeNotifier {
         await (_audioHandler! as MyAudioHandler).playMediaItem(mediaItem);
 
       } else {
-          // For local files, we manage the queue
           List<Song> queueToPlay = newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
           if (newQueue != null) {
             await _updateQueueWithSongs(queueToPlay);
@@ -234,16 +242,12 @@ class MusicProvider with ChangeNotifier {
 
       if (!_isPlayerExpanded) {
         _isPlayerExpanded = true;
-        notifyListeners();
       }
     } catch (e) {
-      print("Error playing song: $e");
+      _errorMessage = "Error playing stream. Please try again.";
     } finally {
-       if (song.type == 'youtube') {
-        // Stop loading
-        _loadingSongId = null;
-        notifyListeners();
-       }
+       _loadingSongId = null;
+       notifyListeners();
     }
   }
 
@@ -253,9 +257,6 @@ class MusicProvider with ChangeNotifier {
   }
 
   MediaItem _songToMediaItem(Song s, {String? audioUrl}) {
-    // The ID for MediaItem MUST be the playable URI.
-    // For local songs, it's the file path (s.id).
-    // For YouTube songs, it's the fetched audio URL.
     String playableId = (s.type == 'youtube') ? (audioUrl ?? s.audioUrl ?? '') : s.id;
 
     return MediaItem(

@@ -9,6 +9,7 @@ import 'package:oxcy/screens/local_music_screen.dart';
 import 'package:oxcy/screens/home_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 void main() {
   runApp(
@@ -19,7 +20,6 @@ void main() {
   );
 }
 
-// Custom scroll behavior for elastic scrolling on all platforms
 class BouncingScrollBehavior extends ScrollBehavior {
   @override
   Widget buildOverscrollIndicator(
@@ -66,75 +66,89 @@ class _MainScaffoldState extends State<MainScaffold> {
     HomeScreen(),
   ];
 
-  // FIX: Automatically scan for new music on app startup
   @override
   void initState() {
     super.initState();
-    // Trigger a silent refresh of local music. 
-    // `listen: false` is crucial here because we are in `initState`.
     Provider.of<MusicProvider>(context, listen: false).fetchLocalMusic();
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<MusicProvider>();
-    final audioHandler = provider.audioHandler;
-
-    return WillPopScope(
-      onWillPop: () async {
-        if (provider.isPlayerExpanded) {
-          provider.collapsePlayer();
-          return false;
+    return Consumer<MusicProvider>(
+      builder: (context, provider, child) {
+        // Listen for error messages and show a toast
+        if (provider.errorMessage != null) {
+          Fluttertoast.showToast(
+            msg: provider.errorMessage!,
+            toastLength: Toast.LENGTH_LONG,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.redAccent,
+            textColor: Colors.white,
+            fontSize: 16.0,
+          );
+          // Clear the error message so the toast doesn't re-appear
+          provider.clearError();
         }
-        return true;
-      },
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0F0C29),
-        body: Stack(
-          children: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF0F0C29),
-                    Color(0xFF302B63),
-                    Color(0xFF24243E)
-                  ],
+
+        final audioHandler = provider.audioHandler;
+
+        return WillPopScope(
+          onWillPop: () async {
+            if (provider.isPlayerExpanded) {
+              provider.collapsePlayer();
+              return false;
+            }
+            return true;
+          },
+          child: Scaffold(
+            backgroundColor: const Color(0xFF0F0C29),
+            body: Stack(
+              children: [
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF0F0C29),
+                        Color(0xFF302B63),
+                        Color(0xFF24243E)
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            IndexedStack(
-              index: _currentIndex,
-              children: _pages,
-            ),
-            if (audioHandler != null)
-              StreamBuilder<MediaItem?>(
-                stream: audioHandler.mediaItem,
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink();
-                  return AnimatedPositioned(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.fastOutSlowIn, 
+                IndexedStack(
+                  index: _currentIndex,
+                  children: _pages,
+                ),
+                if (audioHandler != null)
+                  StreamBuilder<MediaItem?>(
+                    stream: audioHandler.mediaItem,
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const SizedBox.shrink();
+                      return AnimatedPositioned(
+                        duration: const Duration(milliseconds: 500),
+                        curve: Curves.fastOutSlowIn, 
+                        left: 0,
+                        right: 0,
+                        bottom: provider.isPlayerExpanded ? 0 : 85,
+                        top: provider.isPlayerExpanded ? 0 : null,
+                        child: const SmartPlayer(),
+                      );
+                    },
+                  ),
+                if (!provider.isPlayerExpanded)
+                  Positioned(
                     left: 0,
                     right: 0,
-                    bottom: provider.isPlayerExpanded ? 0 : 85,
-                    top: provider.isPlayerExpanded ? 0 : null,
-                    child: const SmartPlayer(),
-                  );
-                },
-              ),
-            if (!provider.isPlayerExpanded)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _buildGlassNavBar(),
-              ),
-          ],
-        ),
-      ),
+                    bottom: 0,
+                    child: _buildGlassNavBar(),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
