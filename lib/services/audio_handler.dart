@@ -1,4 +1,4 @@
-'''import 'dart:async';
+import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart' as just;
@@ -289,4 +289,3 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await _justPlayer.setShuffleModeEnabled(shuffleMode == AudioServiceShuffleMode.all);
   }
 }
-''
