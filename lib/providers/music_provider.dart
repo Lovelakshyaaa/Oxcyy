@@ -14,7 +14,6 @@ class Song {
   final String artist;
   final String thumbUrl;
   final String type;
-  final String? audioUrl; // Playable URL for YouTube songs
   final int? localId;
   final int? albumId;
   final Duration? duration;
@@ -25,7 +24,6 @@ class Song {
     required this.artist,
     required this.thumbUrl,
     required this.type,
-    this.audioUrl,
     this.localId,
     this.albumId,
     this.duration,
@@ -210,22 +208,33 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-  Future<void> play(Song song, {List<Song>? newQueue}) async {
+ Future<void> play(Song song, {List<Song>? newQueue}) async {
     if (_audioHandler == null) return;
 
     try {
+      _loadingSongId = song.id;
+      notifyListeners();
+
       if (song.type == 'youtube') {
-        _loadingSongId = song.id;
-        notifyListeners();
-
-        var manifest = await _yt.videos.streams.getManifest(song.id);
+        var manifest = await _yt.videos.streamsClient.getManifest(song.id);
         var streamInfo = manifest.audioOnly.withHighestBitrate();
-        String audioUrl = streamInfo.url.toString();
+        
+        // Get the actual byte stream and convert it to Uint8List
+        var stream = _yt.videos.streamsClient.get(streamInfo);
+        var completer = Completer<Uint8List>();
+        var builder = BytesBuilder();
+        stream.listen(
+          builder.add,
+          onError: completer.completeError,
+          onDone: () => completer.complete(builder.toBytes()),
+        );
+        final bytes = await completer.future;
 
-        final mediaItem = _songToMediaItem(song, audioUrl: audioUrl);
-        await (_audioHandler! as MyAudioHandler).playMediaItem(mediaItem);
+        final mediaItem = _songToMediaItem(song);
+        await (_audioHandler! as MyAudioHandler).playYoutubeStream(mediaItem, bytes);
 
       } else {
+          // This is the original, untouched logic for local music.
           List<Song> queueToPlay = newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
           if (newQueue != null) {
             await _updateQueueWithSongs(queueToPlay);
@@ -266,11 +275,9 @@ class MusicProvider with ChangeNotifier {
     await _audioHandler!.updateQueue(mediaItems);
   }
 
-  MediaItem _songToMediaItem(Song s, {String? audioUrl}) {
-    String playableId = (s.type == 'youtube') ? (audioUrl ?? s.audioUrl ?? '') : s.id;
-
+  MediaItem _songToMediaItem(Song s) {
     return MediaItem(
-      id: playableId,
+      id: s.id, // The ID is now the YouTube video ID or the local file URI
       album: s.type == 'local' ? "Local Music" : "YouTube",
       title: s.title,
       artist: s.artist,
