@@ -10,8 +10,11 @@ import 'package:oxcy/screens/home_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:media_kit/media_kit.dart'; // Import media_kit
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized(); // Ensure bindings are initialized
+  MediaKit.ensureInitialized(); // Initialize media_kit
   runApp(
     ChangeNotifierProvider(
       create: (context) => MusicProvider(),
