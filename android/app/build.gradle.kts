@@ -3,6 +3,7 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.chaquo.python")
 }
 
 android {
@@ -32,6 +33,10 @@ android {
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -39,15 +44,22 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
-
-            // ⚠️ THE FINAL FIX ⚠️
-            isMinifyEnabled = true  // Protects code using ProGuard rules
-            isShrinkResources = false // CRITICAL: Musify disables this to stop audio bugs
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
         }
     }
+
+    // FIX 4: Packaging options to fix build errors
+    packagingOptions {
+        exclude("META-INF/DEPENDENCIES")
+    }
+}
+
+// FIX 5: Python version for Chaquopy
+chaquopy {
+    version = "3.11"
 }
 
 flutter {
     source = "../.."
 }
+
+dependencies {}
