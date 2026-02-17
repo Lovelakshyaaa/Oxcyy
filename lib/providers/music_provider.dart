@@ -188,7 +188,7 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final searchResult = await _yt.search.search(query);
+      final searchResult = await _yt.search.getVideos(query);
       final List<Song> songs = [];
       for (var video in searchResult) {
         songs.add(Song(
@@ -218,7 +218,7 @@ class MusicProvider with ChangeNotifier {
         _loadingSongId = song.id;
         notifyListeners();
 
-        var manifest = await _yt.videos.streamsClient.getManifest(song.id);
+        var manifest = await _yt.videos.streams.getManifest(song.id);
         var streamInfo = manifest.audioOnly.withHighestBitrate();
         String audioUrl = streamInfo.url.toString();
 
@@ -242,13 +242,11 @@ class MusicProvider with ChangeNotifier {
         _isPlayerExpanded = true;
       }
     } catch (e, s) {
-      // Log the full error and stack trace to the console for debugging.
       print("--- DETAILED PLAYBACK ERROR ---");
       print(e);
       print(s);
       print("---------------------------------");
 
-      // Set a more informative error message for the user's toast notification.
       if (e is VideoUnplayableException) {
         _errorMessage = "Video is unplayable.";
       } else if (e is VideoUnavailableException) {
