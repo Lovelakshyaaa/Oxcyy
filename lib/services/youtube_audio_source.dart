@@ -19,20 +19,33 @@ class YoutubeAudioSource extends UriAudioSource {
     // Get the stream manifest.
     final manifest = await _yt.videos.streamsClient.getManifest(videoId);
     
-    // Use the general StreamInfo class to access the necessary properties.
-    StreamInfo streamInfo = manifest.audioOnly.withHighestBitrate();
+    // Get the audio stream info.
+    final streamInfo = manifest.audioOnly.withHighestBitrate();
+    final originalUrl = streamInfo.url;
 
-    Uri streamUri;
-    if (streamInfo.isCiphered) {
-      // The stream is protected, we need to decipher the signature.
-      final decipheredSignature = await _decipherService.decipher(streamInfo.signature);
-      streamUri = streamInfo.url.replace(queryParameters: {'n': decipheredSignature});
+    Uri finalUrl;
+
+    // Check if the URL contains the ciphered signature parameter 's'.
+    if (originalUrl.queryParameters.containsKey('s')) {
+      // This is the protected signature from YouTube.
+      final String cipheredSignature = originalUrl.queryParameters['s']!;
+      
+      // This is the playable signature we get from our JS solver.
+      final String solvedSignature = await _decipherService.decipher(cipheredSignature);
+
+      // Create new query parameters with the solved signature ('n' parameter).
+      final newQueryParameters = Map<String, String>.from(originalUrl.queryParameters)
+        ..remove('s')
+        ..addAll({'n': solvedSignature});
+
+      // Reconstruct the URL.
+      finalUrl = originalUrl.replace(queryParameters: newQueryParameters);
     } else {
-      // The stream is not protected, we can use the URL directly.
-      streamUri = streamInfo.url;
+      // The URL is not ciphered, use it directly.
+      finalUrl = originalUrl;
     }
 
-    return YoutubeAudioSource._(streamUri, tag: tag);
+    return YoutubeAudioSource._(finalUrl, tag: tag);
   }
 
   // It's good practice to provide a way to close the services.

@@ -1,4 +1,3 @@
-
 import 'package:flutter/services.dart';
 import 'package:flutter_js/flutter_js.dart';
 
@@ -22,7 +21,7 @@ class DecipherService {
       final meriyah = await rootBundle.loadString('knowledge/meriyah-6.1.4.min.js');
       final solver = await rootBundle.loadString('knowledge/yt.solver.core.js');
 
-      // Evaluate the scripts in the JS runtime.
+      // The evaluate method expects a simple String.
       _jsRuntime.evaluate(polyfill);
       _jsRuntime.evaluate(astring);
       _jsRuntime.evaluate(meriyah);
@@ -32,19 +31,20 @@ class DecipherService {
       print("Decipher Service Initialized Successfully.");
     } catch (e) {
       print("Failed to initialize Decipher Service: $e");
-      // You might want to handle this error more gracefully
     }
   }
 
   // Calls the JavaScript function to decipher the signature.
-  // The function name 'solveN' is assumed based on common YouTube solver scripts.
   Future<String> decipher(String signature) async {
     if (!_isInitialized) {
-      throw Exception("Decipher service not initialized");
+      await init(); // Ensure initialization if called prematurely
+      if (!_isInitialized) {
+        throw Exception("Decipher service could not be initialized");
+      }
     }
 
     try {
-      // The function to call in JS is `solveN`. We pass the signature to it.
+      // The evaluate method expects a simple String.
       final result = _jsRuntime.evaluate('solveN("$signature")');
       return result.stringResult;
     } catch (e) {
@@ -57,4 +57,3 @@ class DecipherService {
     _jsRuntime.dispose();
   }
 }
-
