@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/search_provider.dart';
 import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/screens/artist_details_screen.dart';
 import 'package:transparent_image/transparent_image.dart';
 
 class SaavnSearchScreen extends StatefulWidget {
@@ -18,20 +20,16 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
   @override
   void initState() {
     super.initState();
-    // Use a variable for the provider to avoid repeated lookups
     final searchProvider = Provider.of<SearchProvider>(context, listen: false);
 
     _scrollController.addListener(() {
-      // Check if we are at the bottom of the list
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-        // And if we are not already fetching more results
-        if (!searchProvider.isFetchingMore && searchProvider.searchResults.isNotEmpty) {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400) {
+        if (!searchProvider.isFetchingMore && searchProvider.songResults.isNotEmpty) {
           searchProvider.fetchMoreResults();
         }
       }
     });
 
-    // Clear any previous search when the screen is entered
     searchProvider.clearSearch();
   }
 
@@ -49,6 +47,15 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
     }
   }
 
+  void _navigateToArtist(Artist artist) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ArtistDetailsScreen(artist: artist),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,11 +64,11 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
           controller: _searchController,
           autofocus: true,
           decoration: InputDecoration(
-            hintText: 'Search for songs on JioSaavn...',
+            hintText: 'Search Songs, Artists & more...',
             border: InputBorder.none,
-            hintStyle: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color),
+            hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
           ),
-          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           onSubmitted: (_) => _performSearch(),
         ),
         actions: [
@@ -90,69 +97,141 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
             );
           }
 
-          // If there are search results, show them. Otherwise, show popular songs.
-          final List<Song> songsToShow = provider.searchResults.isNotEmpty 
-              ? provider.searchResults 
-              : provider.popularSongs;
-          
-          String listTitle = provider.searchResults.isNotEmpty 
-              ? 'Search Results' 
-              : 'Trending Now';
+          final hasSearchResults = provider.topResult != null || provider.songResults.isNotEmpty || provider.artistResults.isNotEmpty;
 
-          if (provider.isFetchingPopular && songsToShow.isEmpty) {
-             return const Center(child: CircularProgressIndicator());
+          if (!hasSearchResults) {
+            return _buildPopularSongsList(provider.popularSongs);
           }
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          return ListView(
+            controller: _scrollController,
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  listTitle,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              if (provider.topResult != null) ...[
+                _buildSectionHeader('Top Result'),
+                _buildTopResult(provider.topResult!),
+              ],
+              if (provider.songResults.isNotEmpty) ...[
+                _buildSectionHeader('Songs'),
+                ...provider.songResults.map((song) => _buildSongItem(song)).toList(),
+              ],
+              if (provider.isFetchingMore)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32.0),
+                  child: Center(child: CircularProgressIndicator()),
                 ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  itemCount: songsToShow.length + (provider.isFetchingMore ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == songsToShow.length) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final song = songsToShow[index];
-                    return ListTile(
-                      leading: Card(
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: FadeInImage.memoryNetwork(
-                          placeholder: kTransparentImage,
-                          image: song.thumbUrl,
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
-                          imageErrorBuilder: (context, error, stack) => 
-                            const Icon(Icons.music_note, size: 50), 
-                        ),
-                      ),
-                      title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      onTap: () {
-                        // Use the MusicProvider to play the song
-                        Provider.of<MusicProvider>(context, listen: false).play(song);
-                      },
-                    );
-                  },
-                ),
-              ),
+              if (provider.artistResults.isNotEmpty) ...[
+                _buildSectionHeader('Artists'),
+                _buildArtistList(provider.artistResults),
+              ],
+               const SizedBox(height: 120), // Padding at the bottom
             ],
           );
         },
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 8.0),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildTopResult(TopQueryResult result) {
+    if (result is Artist) {
+      return _buildArtistItem(result, isTopResult: true);
+    }
+    if (result is Song) {
+      return _buildSongItem(result);
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildSongItem(Song song) {
+    return ListTile(
+      leading: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+        clipBehavior: Clip.antiAlias,
+        child: FadeInImage.memoryNetwork(
+          placeholder: kTransparentImage,
+          image: song.thumbUrl,
+          width: 56, height: 56, fit: BoxFit.cover,
+          imageErrorBuilder: (c,e,s) => const Icon(Icons.music_note, size: 56),
+        ),
+      ),
+      title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: () => Provider.of<MusicProvider>(context, listen: false).play(song),
+    );
+  }
+  
+  Widget _buildArtistList(List<Artist> artists) {
+    return SizedBox(
+      height: 180,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: artists.length,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 16.0),
+            child: _buildArtistItem(artists[index]),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildArtistItem(Artist artist, {bool isTopResult = false}) {
+    return GestureDetector(
+      onTap: () => _navigateToArtist(artist),
+      child: isTopResult
+          ? ListTile(
+              leading: CircleAvatar(
+                radius: 30,
+                backgroundImage: NetworkImage(artist.imageUrl),
+                backgroundColor: Colors.transparent,
+              ),
+              title: Text(artist.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Artist'),
+            )
+          : SizedBox(
+              width: 120,
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 50,
+                    backgroundImage: NetworkImage(artist.imageUrl),
+                    backgroundColor: Colors.grey.shade800,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    artist.name,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildPopularSongsList(List<Song> songs) {
+    if (songs.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return ListView(
+      children: [
+         _buildSectionHeader('Trending Now'),
+        ...songs.map((song) => _buildSongItem(song)).toList(),
+         const SizedBox(height: 120), // Padding at the bottom
+      ],
     );
   }
 }

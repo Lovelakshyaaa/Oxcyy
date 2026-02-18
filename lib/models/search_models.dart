@@ -1,0 +1,47 @@
+import 'package:oxcy/providers/music_provider.dart';
+
+// A generic top-level result which could be a Song, Artist, or Album
+abstract class TopQueryResult {}
+
+class Artist extends TopQueryResult {
+  final String id;
+  final String name;
+  final String imageUrl;
+  final String type = 'artist';
+
+  Artist({required this.id, required this.name, required this.imageUrl});
+}
+
+class Album extends TopQueryResult {
+  final String id;
+  final String name;
+  final String imageUrl;
+  final String year;
+  final String type = 'album';
+
+  Album({
+    required this.id,
+    required this.name,
+    required this.imageUrl,
+    required this.year,
+  });
+}
+
+// We can extend the existing Song to be a TopQueryResult
+class SearchSong extends Song implements TopQueryResult {
+  SearchSong({
+    required String id,
+    required String title,
+    required String artist,
+    required String thumbUrl,
+    required String type,
+    Duration? duration,
+  }) : super(
+          id: id,
+          title: title,
+          artist: artist,
+          thumbUrl: thumbUrl,
+          type: type,
+          duration: duration,
+        );
+}
