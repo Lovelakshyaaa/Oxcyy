@@ -114,7 +114,6 @@ class MusicData with ChangeNotifier {
     }
   }
 
-  // SAFE PARSING HELPERS
   String _getTitle(Map<String, dynamic> item) {
     return item['name']?.toString() ?? item['title']?.toString() ?? 'Unknown';
   }
@@ -134,17 +133,17 @@ class MusicData with ChangeNotifier {
 
   Song? buildSong(Map<String, dynamic> item) {
     try {
-      if (item['id'] == null) return null;
-      final downloadUrl = _getDownloadUrl(item['downloadUrl']);
-      if (downloadUrl == null) return null;
+      final id = item['id']?.toString();
+      if (id == null) return null;
 
       return Song(
-        id: downloadUrl,
+        id: id,
         title: _getTitle(item),
         artist: _getArtistName(item),
         thumbUrl: _getImageUrl(item['image']),
         type: item['type']?.toString() ?? 'song',
         duration: _getDuration(item['duration']),
+        downloadUrl: _getDownloadUrl(item['downloadUrl']), // Will be null in lists
       );
     } catch (e) {
       print("Error parsing song: $item -> $e");

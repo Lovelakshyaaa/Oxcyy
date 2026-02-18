@@ -1,33 +1,31 @@
-import 'package:oxcy/providers/music_provider.dart';
+class SearchResult {
+  final String id;
+  final String title;
+  final String? subtitle;
+  final String type;
+  final String imageUrl;
 
-// A generic top-level result which could be a Song, Artist, or Album
-abstract class TopQueryResult {}
+  SearchResult({required this.id, required this.title, this.subtitle, required this.type, required this.imageUrl});
+}
 
-class Artist extends TopQueryResult {
+class Artist {
   final String id;
   final String name;
   final String imageUrl;
-  final String type = 'artist';
 
   Artist({required this.id, required this.name, required this.imageUrl});
 }
 
-class Album extends TopQueryResult {
+class Album {
   final String id;
   final String title;
   final String imageUrl;
   final String? subtitle;
-  final String type = 'album';
 
-  Album({
-    required this.id,
-    required this.title,
-    required this.imageUrl,
-    this.subtitle,
-  });
+  Album({required this.id, required this.title, required this.imageUrl, this.subtitle});
 }
 
-class Playlist extends TopQueryResult {
+class Playlist {
   final String id;
   final String title;
   final String imageUrl;
@@ -36,7 +34,7 @@ class Playlist extends TopQueryResult {
   Playlist({required this.id, required this.title, required this.imageUrl, this.subtitle});
 }
 
-class Chart extends TopQueryResult {
+class Chart {
   final String id;
   final String title;
   final String imageUrl;
@@ -44,22 +42,22 @@ class Chart extends TopQueryResult {
   Chart({required this.id, required this.title, required this.imageUrl});
 }
 
+class Song {
+  final String id; // The unique ID of the song from the API
+  final String title;
+  final String artist;
+  final String thumbUrl;
+  final String? type;
+  final Duration? duration;
+  String? downloadUrl; // Made optional
 
-// We can extend the existing Song to be a TopQueryResult
-class SearchSong extends Song implements TopQueryResult {
-  SearchSong({
-    required String id,
-    required String title,
-    required String artist,
-    required String thumbUrl,
-    required String type,
-    Duration? duration,
-  }) : super(
-          id: id,
-          title: title,
-          artist: artist,
-          thumbUrl: thumbUrl,
-          type: type,
-          duration: duration,
-        );
+  Song({
+    required this.id,
+    required this.title,
+    required this.artist,
+    required this.thumbUrl,
+    this.type,
+    this.duration,
+    this.downloadUrl, // Optional parameter
+  });
 }
