@@ -185,6 +185,7 @@ class MusicProvider with ChangeNotifier {
     if (query.isEmpty) return;
     _isSearching = true;
     _searchResults.clear();
+    _errorMessage = null;
     notifyListeners();
 
     try {
@@ -194,44 +195,49 @@ class MusicProvider with ChangeNotifier {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List<Song> results = [];
+        bool resultsHadContent = false;
 
         if (data['data'] != null && data['data']['results'] is List) {
-          for (var item in (data['data']['results'] as List)) {
-            try {
-              // --- Defensive URL Parsing ---
-              String? downloadUrl;
-              if (item['downloadUrl'] is List && (item['downloadUrl'] as List).isNotEmpty) {
-                  final lastUrl = (item['downloadUrl'] as List).last;
-                  if (lastUrl is Map && lastUrl.containsKey('link')) {
-                    downloadUrl = lastUrl['link'];
-                  }
-              }
-              if (downloadUrl == null) continue; // Skip if no valid download URL
+          final apiResults = data['data']['results'] as List;
+          if (apiResults.isNotEmpty) {
+            resultsHadContent = true;
+          }
 
-              // --- Defensive Image Parsing ---
+          for (var item in apiResults) {
+            try {
+              // --- Correct and Defensive Parsing ---
+
+              // 1. Correct Key: 'download_url'
+              String? downloadUrl;
+              if (item['download_url'] is List && (item['download_url'] as List).isNotEmpty) {
+                final lastUrl = (item['download_url'] as List).last;
+                if (lastUrl is Map && lastUrl.containsKey('link')) {
+                  downloadUrl = lastUrl['link'];
+                }
+              }
+              if (downloadUrl == null) continue; 
+
+              // 2. Correct Key: 'image'
               String imageUrl = '';
               if (item['image'] is List && (item['image'] as List).isNotEmpty) {
-                  final lastImage = (item['image'] as List).last;
-                   if (lastImage is Map && lastImage.containsKey('link')) {
-                    imageUrl = lastImage['link'];
-                  }
-              }
-
-              // --- Defensive Artist Parsing ---
-              String artist = 'Unknown Artist';
-              if(item['primaryArtists'] is String) {
-                artist = item['primaryArtists'];
-              } else if (item['primaryArtists'] is List) {
-                artist = (item['primaryArtists'] as List).join(', ');
-              }
-
-              // --- Defensive Duration Parsing ---
-              Duration? duration;
-              if (item['duration'] is String) {
-                final seconds = int.tryParse(item['duration']);
-                if (seconds != null) {
-                  duration = Duration(seconds: seconds);
+                final lastImage = (item['image'] as List).last;
+                if (lastImage is Map && lastImage.containsKey('link')) {
+                  imageUrl = lastImage['link'];
                 }
+              }
+
+              // 3. Correct Key & Logic: 'primary_artists'
+              String artist = 'Unknown Artist';
+              if (item['primary_artists'] is List && (item['primary_artists'] as List).isNotEmpty) {
+                artist = (item['primary_artists'] as List)
+                    .map((artistObj) => artistObj['name'] as String? ?? '')
+                    .join(', ');
+              }
+
+              // 4. Correct Type: 'duration' is a num
+              Duration? duration;
+              if (item['duration'] is num) {
+                duration = Duration(seconds: (item['duration'] as num).toInt());
               }
 
               results.add(Song(
@@ -244,17 +250,21 @@ class MusicProvider with ChangeNotifier {
               ));
             } catch (e) {
               print("Error parsing individual search item: $e");
-              // Optional: Log this error, but don't let one bad item stop the whole list.
               continue;
             }
           }
         }
         _searchResults = results;
+
+        if (resultsHadContent && _searchResults.isEmpty) {
+          _errorMessage = "No playable songs found. The API may have changed.";
+        }
+
       } else {
-        _errorMessage = "API Error: Failed to get search results.";
+        _errorMessage = "API Error: ${response.statusCode}";
       }
     } catch (e) {
-      _errorMessage = "Network Error: Failed to connect to service.";
+      _errorMessage = "Network Error: Please check your connection.";
       print("Saavn search error: $e");
     } finally {
       _isSearching = false;
@@ -271,12 +281,14 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
 
       if (song.type == 'saavn') {
-        // For Saavn songs, create a new queue with the selected song and play it.
         final mediaItem = _songToMediaItem(song);
-        await _audioHandler!.updateQueue([mediaItem]);
+        // For Saavn songs, we insert it at the beginning of the current queue
+        final currentQueue = _audioHandler!.queue.value;
+        final newQueue = [mediaItem, ...currentQueue];
+        await _audioHandler!.updateQueue(newQueue);
+        await _audioHandler!.skipToQueueItem(0);
         await _audioHandler!.play();
       } else {
-        // For local songs, use the existing queue logic.
         List<Song> queueToPlay =
             newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
         if (newQueue != null) {
@@ -313,7 +325,7 @@ class MusicProvider with ChangeNotifier {
       album: s.type == 'saavn' ? "Saavn" : "Local Music",
       title: s.title,
       artist: s.artist,
-      artUri: s.type == 'saavn' ? Uri.parse(s.thumbUrl) : null,
+      artUri: s.type == 'saavn' && s.thumbUrl.isNotEmpty ? Uri.parse(s.thumbUrl) : null,
       genre: s.type,
       duration: s.duration,
       extras: {'artworkId': s.localId, 'albumId': s.albumId},
