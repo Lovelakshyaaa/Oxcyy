@@ -1,0 +1,49 @@
+home module/ launch data: curl https://music-three-woad.vercel.app/modules
+
+song details: curl https://music-three-woad.vercel.app/song
+
+song recommend: curl 'https://music-three-woad.vercel.app/song/recommend?id=6r5d1x0b' (Id is an example)
+
+album details: curl https://music-three-woad.vercel.app/album
+
+album recommendations: curl 'https://music-three-woad.vercel.app/album/recommend?id='
+
+album from the same year: curl 'https://music-three-woad.vercel.app/album/same-year?year=2020'(example year)
+
+playlist details: curl https://music-three-woad.vercel.app/playlist
+
+playlist recommendations: curl 'https://music-three-woad.vercel.app/playlist/recommend?id='
+
+artist details: curl https://music-three-woad.vercel.app/artist
+
+artist songs: curl 'https://music-three-woad.vercel.app/artist/songs?id='
+
+artist albums: curl 'https://music-three-woad.vercel.app/artist/albums?id='
+
+artist top songs: curl 'https://music-three-woad.vercel.app/artist/top-songs?artist_id=&song_id='
+
+artist recommendations: curl 'https://music-three-woad.vercel.app/artist/recommend?artist_id=&song_id='
+
+search all: curl 'https://music-three-woad.vercel.app/search?q=arijit%20singh' (example Arijit)
+
+top searches: curl https://music-three-woad.vercel.app/search/top
+
+search by entity: curl 'https://music-three-woad.vercel.app/search/songs?q=' (entity can be album, artist, song, playlists)
+
+get trending: curl https://music-three-woad.vercel.app/get/trending
+
+get collections: curl https://music-three-woad.vercel.app/get/charts
+
+actor top songs: curl 'https://music-three-woad.vercel.app/get/actor-top-songs?actor_id=&song_id='
+
+footer details: curl https://music-three-woad.vercel.app/get/footer-details
+
+get lyrics: curl 'https://music-three-woad.vercel.app/get/lyrics?id='
+
+get synced lyrics (LRCLIB): curl https://music-three-woad.vercel.app/get/synced-lyrics
+
+mix details: curl https://music-three-woad.vercel.app/get/mix
+
+label details: curl https://music-three-woad.vercel.app/get/label
+
+mega menu: curl https://music-three-woad.vercel.app/get/mega-menu

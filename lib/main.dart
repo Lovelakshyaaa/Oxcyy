@@ -5,22 +5,22 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/providers/search_provider.dart';
+import 'package:oxcy/providers/music_data_provider.dart';
 import 'package:oxcy/screens/local_music_screen.dart';
-import 'package:oxcy/screens/saavn_search_screen.dart';
+import 'package:oxcy/screens/explore_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:media_kit/media_kit.dart'; // Import media_kit
+import 'package:media_kit/media_kit.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized(); // Ensure bindings are initialized
-  MediaKit.ensureInitialized(); // Initialize media_kit
+  WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => MusicProvider()),
-        ChangeNotifierProvider(create: (context) => SearchProvider()),
+        ChangeNotifierProvider(create: (context) => MusicData()),
       ],
       child: const MyApp(),
     ),
@@ -70,7 +70,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   final List<Widget> _pages = [
     const LocalMusicScreen(),
-    const SaavnSearchScreen(),
+    const ExploreScreen(),
   ];
 
   @override
@@ -83,7 +83,6 @@ class _MainScaffoldState extends State<MainScaffold> {
   Widget build(BuildContext context) {
     return Consumer<MusicProvider>(
       builder: (context, provider, child) {
-        // Listen for error messages and show a toast
         if (provider.errorMessage != null) {
           Fluttertoast.showToast(
             msg: provider.errorMessage!,
@@ -93,7 +92,6 @@ class _MainScaffoldState extends State<MainScaffold> {
             textColor: Colors.white,
             fontSize: 16.0,
           );
-          // Clear the error message so the toast doesn't re-appear
           provider.clearError();
         }
 
@@ -197,8 +195,8 @@ class _MainScaffoldState extends State<MainScaffold> {
             label: "My Music",
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search_rounded),
-            label: "Search",
+            icon: Icon(Icons.explore_rounded),
+            label: "Explore",
           ),
         ],
       ),
