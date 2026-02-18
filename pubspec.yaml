@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.4.0 <4.0.0'
+  sdk: '>=3.6.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -26,6 +26,7 @@ dependencies:
   animations: ^2.1.1
   flutter_staggered_animations: ^1.1.1
   fluttertoast: ^8.2.6
+  transparent_image: ^2.0.0
 
   # STATE
   provider: ^6.1.5+1
