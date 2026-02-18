@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:oxcy/models/search_models.dart';
 
 class MusicProvider with ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final OnAudioQuery _audioQuery = OnAudioQuery();
   final String _baseUrl = "https://music-three-woad.vercel.app";
 
   Song? _currentSong;
@@ -19,6 +21,30 @@ class MusicProvider with ChangeNotifier {
 
   Duration _position = Duration.zero;
   Duration get position => _position;
+  
+  // --- RESTORED UI AND LOCAL STATE ---
+  bool _isPlayerExpanded = false;
+  bool get isPlayerExpanded => _isPlayerExpanded;
+
+  List<AlbumModel> _localAlbums = [];
+  List<AlbumModel> get localAlbums => _localAlbums;
+
+  bool _isFetchingLocal = false;
+  bool get isFetchingLocal => _isFetchingLocal;
+
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
+
+  String? _loadingSongId;
+  String? get loadingSongId => _loadingSongId;
+
+  LoopMode _repeatMode = LoopMode.off;
+  LoopMode get repeatMode => _repeatMode;
+
+  bool _isShuffleEnabled = false;
+  bool get isShuffleEnabled => _isShuffleEnabled;
+  // --- END RESTORED STATE ---
+
 
   MusicProvider() {
     _audioPlayer.playerStateStream.listen((playerState) {
@@ -39,46 +65,124 @@ class MusicProvider with ChangeNotifier {
       _position = p;
       notifyListeners();
     });
+
+    _audioPlayer.loopModeStream.listen((mode) {
+        _repeatMode = mode;
+        notifyListeners();
+    });
+
+    _audioPlayer.shuffleModeEnabledStream.listen((enabled) {
+        _isShuffleEnabled = enabled;
+        notifyListeners();
+    });
   }
 
-  Future<void> play(Song song) async {
-    _currentSong = song;
+  Future<void> play(Song song, {List<Song>? newQueue}) async {
+    _loadingSongId = song.id;
     notifyListeners();
 
     try {
       if (song.downloadUrl == null || song.downloadUrl!.isEmpty) {
-        // Fetch the song details to get the download URL
         final response = await http.get(Uri.parse('$_baseUrl/song?id=${song.id}'));
         if (response.statusCode == 200) {
           final data = json.decode(response.body)['data'];
-          // The response for a single song might be a list
           final songData = data is List ? data[0] : data;
           final downloadUrl = _getDownloadUrl(songData['downloadUrl']);
 
           if (downloadUrl != null) {
             song.downloadUrl = downloadUrl;
           } else {
-            print('Error: Download URL not found in API response for song id ${song.id}');
-            return; // Can't play without a URL
+             _setError('Playback error: Could not find a playable URL.');
+            return;
           }
         } else {
-          print('Error: Failed to fetch song details (status code: ${response.statusCode})');
+          _setError('Network error fetching song details.');
           return;
         }
       }
 
       if (song.downloadUrl != null) {
         await _audioPlayer.setUrl(song.downloadUrl!);
+        _currentSong = song;
         _audioPlayer.play();
       }
     } catch (e) {
-      print("Error playing song: $e");
+      _setError("Error during playback setup: $e");
+    } finally {
+      _loadingSongId = null;
+      notifyListeners();
+    }
+  }
+  
+  // --- RESTORED METHODS ---
+  void _setError(String message) {
+    _errorMessage = message;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> fetchLocalMusic() async {
+    bool permissionGranted = await _audioQuery.permissionsStatus();
+    if (!permissionGranted) {
+      permissionGranted = await _audioQuery.permissionsRequest();
+    }
+    if (!permissionGranted) {
+      _setError("Storage permission not granted.");
+      return;
+    }
+
+    _isFetchingLocal = true;
+    notifyListeners();
+    try {
+      _localAlbums = await _audioQuery.queryAlbums();
+    } catch (e) {
+      _setError("Failed to fetch local music: $e");
+    } finally {
+      _isFetchingLocal = false;
+      notifyListeners();
     }
   }
 
+  Future<List<SongModel>> getLocalSongsByAlbum(int albumId) async {
+    return await _audioQuery.querySongs(albumId: albumId, sortType: SongSortType.TRACK);
+  }
+
+  Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
+    return await _audioQuery.queryArtwork(id, type);
+  }
+
+  void togglePlayerView() {
+    _isPlayerExpanded = !_isPlayerExpanded;
+    notifyListeners();
+  }
+
+  void collapsePlayer() {
+    _isPlayerExpanded = false;
+    notifyListeners();
+  }
+  
+  void cycleRepeatMode() {
+    if (_repeatMode == LoopMode.off) {
+      _audioPlayer.setLoopMode(LoopMode.one);
+    } else if (_repeatMode == LoopMode.one) {
+      _audioPlayer.setLoopMode(LoopMode.all);
+    } else {
+      _audioPlayer.setLoopMode(LoopMode.off);
+    }
+  }
+
+  void toggleShuffle() {
+    _audioPlayer.setShuffleModeEnabled(!_isShuffleEnabled);
+  }
+
+  // --- END RESTORED METHODS ---
+
   String? _getDownloadUrl(dynamic urlField) {
     if (urlField is List && urlField.isNotEmpty) {
-      // Look for the last URL which is often the highest quality
       return urlField.last['link'];
     }
     if (urlField is String) {
@@ -101,7 +205,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    _audio_player.dispose();
     super.dispose();
   }
 }
