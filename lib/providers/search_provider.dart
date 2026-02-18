@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/utils/clients.dart'; // Import the custom client
 
 class SearchProvider with ChangeNotifier {
-  List<dynamic> _popularResults = []; // Can hold both Songs and Artists
+  final CustomHttpClient _client = CustomHttpClient();
+
+  List<dynamic> _popularResults = [];
   List<dynamic> get popularResults => _popularResults;
 
   TopQueryResult? _topResult;
@@ -37,6 +39,27 @@ class SearchProvider with ChangeNotifier {
     fetchPopular();
   }
 
+  @override
+  void dispose() {
+    _client.close();
+    super.dispose();
+  }
+
+  Future<void> _fetchAndParse(String url, Function(Map<String, dynamic>) parser) async {
+    try {
+      final response = await _client.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body)['data'];
+        parser(data);
+      } else {
+        _errorMessage = "API Error: Failed to fetch data (Code: ${response.statusCode})";
+      }
+    } catch (e) {
+      _errorMessage = "Network Error: Could not connect to service.";
+      print("Network request error: $e");
+    }
+  }
+
   void _clearAllResults() {
     _topResult = null;
     _songResults.clear();
@@ -50,43 +73,19 @@ class SearchProvider with ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    try {
-      final response = await http.get(Uri.parse('https://saavn.me/modules?language=hindi,english'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body)['data'];
-        final List<dynamic> results = [];
-
-        // Trending Songs (Albums are treated as songs here)
-        if (data['trending'] != null && data['trending']['albums'] is List) {
-          for (var item in (data['trending']['albums'] as List)) {
-            final song = _parseSongItem(item);
-            if (song != null) {
-              results.add(song);
-            }
-          }
-        }
-
-        // Top Artists
-        if (data['artists'] != null && data['artists'] is List) {
-          for (var item in (data['artists'] as List)) {
-            final artist = _parseArtistItem(item);
-            if (artist != null) {
-              results.add(artist);
-            }
-          }
-        }
-
-        _popularResults = results;
-      } else {
-        _errorMessage = "Could not fetch popular results.";
+    await _fetchAndParse('https://saavn.me/modules?language=hindi,english', (data) {
+      final List<dynamic> results = [];
+      if (data['trending'] != null && data['trending']['albums'] is List) {
+        results.addAll((data['trending']['albums'] as List).map((item) => _parseSongItem(item)).whereType<Song>());
       }
-    } catch (e) {
-      _errorMessage = "Network error while fetching popular results.";
-      print("Popular fetch error: $e");
-    } finally {
-      _isFetchingPopular = false;
-      notifyListeners();
-    }
+      if (data['artists'] != null && data['artists'] is List) {
+        results.addAll((data['artists'] as List).map((item) => _parseArtistItem(item)).whereType<Artist>());
+      }
+      _popularResults = results;
+    });
+
+    _isFetchingPopular = false;
+    notifyListeners();
   }
 
   Future<void> search(String query) async {
@@ -98,22 +97,10 @@ class SearchProvider with ChangeNotifier {
     _clearAllResults();
     notifyListeners();
 
-    try {
-      final response = await http.get(Uri.parse('https://saavn.me/search/all?query=${Uri.encodeComponent(query)}'));
+    await _fetchAndParse('https://saavn.me/search/all?query=${Uri.encodeComponent(query)}', _parseAllResults);
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body)['data'];
-        _parseAllResults(data);
-      } else {
-        _errorMessage = "API Error: Failed to get search results.";
-      }
-    } catch (e) {
-      _errorMessage = "Network Error: Could not connect to service.";
-      print("Search error: $e");
-    } finally {
-      _isSearching = false;
-      notifyListeners();
-    }
+    _isSearching = false;
+    notifyListeners();
   }
 
   void _parseAllResults(Map<String, dynamic> data) {
@@ -123,26 +110,18 @@ class SearchProvider with ChangeNotifier {
         _topResult = _parseTopQueryResult(topQueryResults.first);
       }
     }
-
     if (data['songs'] != null && data['songs']['results'] is List) {
-      final songItems = data['songs']['results'] as List;
-      _songResults = songItems.map((item) => _parseSongItem(item)).whereType<Song>().toList();
+      _songResults = (data['songs']['results'] as List).map((item) => _parseSongItem(item)).whereType<Song>().toList();
     }
-
     if (data['artists'] != null && data['artists']['results'] is List) {
-      final artistItems = data['artists']['results'] as List;
-      _artistResults = artistItems.map((item) => _parseArtistItem(item)).whereType<Artist>().toList();
+      _artistResults = (data['artists']['results'] as List).map((item) => _parseArtistItem(item)).whereType<Artist>().toList();
     }
   }
 
   TopQueryResult? _parseTopQueryResult(Map<String, dynamic> item) {
     final type = item['type'];
-    if (type == 'artist') {
-      return _parseArtistItem(item);
-    }
-    if (type == 'song') {
-      return _parseSongItem(item);
-    }
+    if (type == 'artist') return _parseArtistItem(item);
+    if (type == 'song') return _parseSongItem(item);
     return null;
   }
 
@@ -163,46 +142,41 @@ class SearchProvider with ChangeNotifier {
     try {
       String? downloadUrl;
       if (item['downloadUrl'] is List && (item['downloadUrl'] as List).isNotEmpty) {
-        final lastUrl = (item['downloadUrl'] as List).last;
-        if (lastUrl is Map && lastUrl.containsKey('link')) {
+        final Map? lastUrl = (item['downloadUrl'] as List).lastWhere((u) => u['quality'] == '320kbps', orElse: () => (item['downloadUrl'] as List).last);
+        if (lastUrl != null && lastUrl.containsKey('link')) {
           downloadUrl = lastUrl['link'];
         }
       }
       if (downloadUrl == null) return null;
 
-      String imageUrl = _getImageUrl(item['image']);
-
-      String artist = 'Unknown Artist';
-      if (item.containsKey('primaryArtists') && item['primaryArtists'] is String) {
-        artist = item['primaryArtists'];
-      } else if (item.containsKey('artists') && item['artists'] is List) {
-        artist = (item['artists'] as List).map((a) => a['name']).join(', ');
-      } else if (item.containsKey('primaryArtists') && item['primaryArtists'] is List) {
-        artist = (item['primaryArtists'] as List).map((a) => a['name']).join(', ');
-      }
-
-      Duration? duration;
-      if (item['duration'] is String) {
-        final seconds = int.tryParse(item['duration']);
-        if (seconds != null) {
-          duration = Duration(seconds: seconds);
-        }
-      } else if (item['duration'] is num) {
-        duration = Duration(seconds: (item['duration'] as num).toInt());
-      }
-
       return Song(
         id: downloadUrl,
         title: item['name'] as String? ?? item['title'] as String? ?? 'Unknown Title',
-        artist: artist,
-        thumbUrl: imageUrl,
+        artist: _getArtistName(item),
+        thumbUrl: _getImageUrl(item['image']),
         type: 'saavn',
-        duration: duration,
+        duration: _getDuration(item['duration']),
       );
     } catch (e) {
       print("Error parsing song item: $e");
       return null;
     }
+  }
+  
+  String _getArtistName(Map<String, dynamic> item) {
+    if (item['primaryArtists'] is String && (item['primaryArtists'] as String).isNotEmpty) return item['primaryArtists'];
+    if (item['primaryArtists'] is List && (item['primaryArtists'] as List).isNotEmpty) return (item['primaryArtists'] as List).map((a) => a['name']).join(', ');
+    if (item['artists'] is List && (item['artists'] as List).isNotEmpty) return (item['artists'] as List).map((a) => a['name']).join(', ');
+    return 'Unknown Artist';
+  }
+
+  Duration? _getDuration(dynamic duration) {
+    if (duration is String) {
+      final seconds = int.tryParse(duration);
+      return seconds != null ? Duration(seconds: seconds) : null;
+    }
+    if (duration is num) return Duration(seconds: duration.toInt());
+    return null;
   }
 
   String _getImageUrl(dynamic imageField) {
@@ -218,31 +192,16 @@ class SearchProvider with ChangeNotifier {
 
     _isFetchingMore = true;
     notifyListeners();
-
     _currentPage++;
-    try {
-      final response = await http.get(Uri.parse('https://saavn.me/search/songs?query=${Uri.encodeComponent(_currentQuery)}&page=$_currentPage'));
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body)['data'];
-        final List<Song> moreResults = [];
-        if (data['results'] is List) {
-          final apiResults = data['results'] as List;
-          for (var item in apiResults) {
-            final song = _parseSongItem(item);
-            if (song != null) {
-              moreResults.add(song);
-            }
-          }
-          _songResults.addAll(moreResults);
-        }
+    await _fetchAndParse('https://saavn.me/search/songs?query=${Uri.encodeComponent(_currentQuery)}&page=$_currentPage', (data) {
+      if (data['results'] is List) {
+        _songResults.addAll((data['results'] as List).map((item) => _parseSongItem(item)).whereType<Song>());
       }
-    } catch (e) {
-      print("Fetch more error: $e");
-    } finally {
-      _isFetchingMore = false;
-      notifyListeners();
-    }
+    });
+
+    _isFetchingMore = false;
+    notifyListeners();
   }
 
   void clearSearch() {
