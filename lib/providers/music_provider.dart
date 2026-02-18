@@ -7,9 +7,10 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/services/audio_handler.dart';
+import 'package:oxcy/models/search_models.dart'; // Import the new models
 
 // Represents a single song, abstracting over local and Saavn sources.
-class Song {
+class Song extends TopQueryResult {
   final String id; // Stream URL for Saavn, file URI for local
   final String title;
   final String artist;
