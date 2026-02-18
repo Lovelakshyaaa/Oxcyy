@@ -28,15 +28,20 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> {
 
   Future<Map<String, dynamic>> _fetchPlaylistDetails() async {
     try {
-      final playlistResponse = await http.get(Uri.parse('$_baseUrl/playlists?id=${widget.playlistId}'));
+      // Corrected Endpoint: /playlist?id=...
+      final playlistResponse = await http.get(Uri.parse('$_baseUrl/playlist?id=${widget.playlistId}'));
 
       if (playlistResponse.statusCode == 200) {
         final musicData = Provider.of<MusicData>(context, listen: false);
         final playlistData = json.decode(playlistResponse.body)['data'];
 
+        if (playlistData == null) {
+          throw Exception('No data found for this playlist.');
+        }
+
         return {
           'details': musicData.buildPlaylist(playlistData),
-          'songs': (playlistData['songs'] as List).map((song) => musicData.buildSong(song)).whereType<Song>().toList(),
+          'songs': (playlistData['songs'] as List? ?? []).map((song) => musicData.buildSong(song)).whereType<Song>().toList(),
         };
       } else {
         throw Exception('Failed to load playlist details');
@@ -57,15 +62,16 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: Text('No details found.'));
+          if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
+            return Center(child: Text('Error: ${snapshot.error ?? "Could not load details."}'));
           }
 
-          final Playlist details = snapshot.data!['details'];
+          final Playlist? details = snapshot.data!['details'];
           final List<Song> songs = snapshot.data!['songs'];
+
+          if (details == null) {
+            return const Center(child: Text('Playlist details could not be loaded.'));
+          }
 
           return CustomScrollView(
             slivers: [
@@ -74,21 +80,30 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> {
                 backgroundColor: Colors.transparent,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: Text(details.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(details.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                   background: FadeInImage.memoryNetwork(
                     placeholder: kTransparentImage,
                     image: details.imageUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
+                    imageErrorBuilder: (c, e, s) => Container(color: Colors.grey[800]),
                   ),
                 ),
               ),
-              SliverList(
-                delegate: SliverChildListDelegate([
-                  ...songs.map((song) => _buildSongItem(song)).toList(),
-                  const SizedBox(height: 120), // Padding
-                ]),
-              ),
+              if (songs.isEmpty)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: Center(child: Text("No songs found in this playlist.")),
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildListDelegate([
+                    ...songs.map((song) => _buildSongItem(song)).toList(),
+                    const SizedBox(height: 120), // Padding for player
+                  ]),
+                ),
             ],
           );
         },
@@ -105,8 +120,10 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> {
         child: FadeInImage.memoryNetwork(
           placeholder: kTransparentImage,
           image: song.thumbUrl,
-          width: 56, height: 56, fit: BoxFit.cover,
-          imageErrorBuilder: (c,e,s) => const Icon(Icons.music_note, size: 56),
+          width: 56,
+          height: 56,
+          fit: BoxFit.cover,
+          imageErrorBuilder: (c, e, s) => const Icon(Icons.music_note, size: 56),
         ),
       ),
       title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
