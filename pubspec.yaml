@@ -35,11 +35,8 @@ dependencies:
   audio_service: ^0.18.18
   audio_session: ^0.2.2
   on_audio_query: ^2.9.0
-  media_kit: ^1.1.10 # For YouTube streams
+  media_kit: ^1.1.10 # Retained for potential future use, but YouTube functionality removed
   media_kit_libs_audio: ^1.0.4
-
-  # YOUTUBE (Official)
-  youtube_explode_dart: ^3.0.5
 
   # JS ENGINE for Decipher
   flutter_js: ^0.8.0

@@ -43,10 +43,14 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
               centerTitle: true,
               title: Text(
                 widget.album.album,
-                style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18),
               ),
               background: FutureBuilder<Uint8List?>(
-                future: musicProvider.getArtwork(widget.album.id, ArtworkType.ALBUM),
+                future: musicProvider.getArtwork(
+                    widget.album.id, ArtworkType.ALBUM),
                 builder: (context, snapshot) {
                   return AnimatedSwitcher(
                     duration: const Duration(milliseconds: 500),
@@ -61,7 +65,8 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                         : Container(
                             key: const ValueKey<int>(2),
                             color: Colors.grey[900],
-                            child: const Icon(Icons.album, color: Colors.white, size: 150),
+                            child: const Icon(Icons.album,
+                                color: Colors.white, size: 150),
                           ),
                   );
                 },
@@ -76,7 +81,9 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                   child: Center(child: CircularProgressIndicator()),
                 );
               }
-              if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+              if (snapshot.hasError ||
+                  !snapshot.hasData ||
+                  snapshot.data!.isEmpty) {
                 return const SliverToBoxAdapter(
                   child: Center(child: Text('No songs found in this album.')),
                 );
@@ -97,13 +104,16 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                           verticalOffset: 50.0,
                           child: FadeInAnimation(
                             child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 8),
                               leading: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: FutureBuilder<Uint8List?>(
-                                  future: musicProvider.getArtwork(song.localId!, ArtworkType.AUDIO),
+                                  future: musicProvider.getArtwork(
+                                      song.localId!, ArtworkType.AUDIO),
                                   builder: (context, snapshot) {
-                                    if (snapshot.hasData && snapshot.data != null) {
+                                    if (snapshot.hasData &&
+                                        snapshot.data != null) {
                                       return Image.memory(
                                         snapshot.data!,
                                         width: 50,
@@ -117,20 +127,34 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
                                       width: 50,
                                       height: 50,
                                       color: Colors.grey.withOpacity(0.2),
-                                      child: const Icon(Icons.music_note, color: Colors.white70),
+                                      child: const Icon(Icons.music_note,
+                                          color: Colors.white70),
                                     );
                                   },
                                 ),
                               ),
-                              title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w500)),
-                              subtitle: Text(song.artist ?? "Unknown Artist", maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(color: Colors.white70, fontSize: 13)),
+                              title: Text(song.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w500)),
+                              subtitle: Text(song.artist ?? "Unknown Artist",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.white70, fontSize: 13)),
                               trailing: isLoading
-                                ? const CircularProgressIndicator(color: Colors.purpleAccent)
-                                : null,
-                              onTap: isLoading ? null : () {
-                                musicProvider.play(song, newQueue: songsInAlbum);
-                                Navigator.pop(context);
-                              },
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.purpleAccent)
+                                  : null,
+                              onTap: isLoading
+                                  ? null
+                                  : () {
+                                      musicProvider.play(song,
+                                          newQueue: songsInAlbum);
+                                      Navigator.pop(context);
+                                    },
                             ),
                           ),
                         ),

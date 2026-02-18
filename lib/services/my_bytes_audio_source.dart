@@ -7,7 +7,9 @@ class MyBytesAudioSource extends StreamAudioSource {
   final Uint8List _buffer;
   final String contentType;
 
-  MyBytesAudioSource(this._buffer, {required this.contentType, required dynamic tag}) : super(tag: tag);
+  MyBytesAudioSource(this._buffer,
+      {required this.contentType, required dynamic tag})
+      : super(tag: tag);
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {

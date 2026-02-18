@@ -18,8 +18,10 @@ class DecipherService {
     try {
       // Load all the required JS libraries from the assets.
       final polyfill = await rootBundle.loadString('knowledge/polyfill.js');
-      final astring = await rootBundle.loadString('knowledge/astring-1.9.0.min.js');
-      final meriyah = await rootBundle.loadString('knowledge/meriyah-6.1.4.min.js');
+      final astring =
+          await rootBundle.loadString('knowledge/astring-1.9.0.min.js');
+      final meriyah =
+          await rootBundle.loadString('knowledge/meriyah-6.1.4.min.js');
       final solver = await rootBundle.loadString('knowledge/yt.solver.core.js');
 
       _jsRuntime.evaluate(polyfill);

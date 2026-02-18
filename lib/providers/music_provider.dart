@@ -1,15 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:http/http.dart' as http;
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/services/audio_handler.dart';
 
-// Represents a single song, abstracting over local and YouTube sources.
+// Represents a single song, abstracting over local and Saavn sources.
 class Song {
-  final String id; // videoId for YouTube, file URI for local
+  final String id; // Stream URL for Saavn, file URI for local
   final String title;
   final String artist;
   final String thumbUrl;
@@ -33,8 +34,6 @@ class Song {
 // Manages the application's music state, including search, playback, and local files.
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  final YoutubeExplode _yt = YoutubeExplode();
-
   AudioHandler? _audioHandler;
   AudioHandler? get audioHandler => _audioHandler;
 
@@ -96,7 +95,8 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      if (await Permission.audio.request().isGranted || await Permission.storage.request().isGranted) {
+      if (await Permission.audio.request().isGranted ||
+          await Permission.storage.request().isGranted) {
         List<AlbumModel> albums = await _audioQuery.queryAlbums(
           sortType: AlbumSortType.ALBUM,
           orderType: OrderType.ASC_OR_SMALLER,
@@ -129,13 +129,14 @@ class MusicProvider with ChangeNotifier {
         _shuffledSongs = List.from(_localSongs)..shuffle();
 
         if (_audioHandler != null) {
-          await _updateQueueWithSongs(_isShuffleEnabled ? _shuffledSongs : _localSongs);
+          await _updateQueueWithSongs(
+              _isShuffleEnabled ? _shuffledSongs : _localSongs);
         }
       }
     } catch (e) {
       print("Error fetching local music: $e");
-       _errorMessage = "Error fetching local music.";
-       notifyListeners();
+      _errorMessage = "Error fetching local music.";
+      notifyListeners();
     } finally {
       _isFetchingLocal = false;
       notifyListeners();
@@ -174,7 +175,8 @@ class MusicProvider with ChangeNotifier {
     final String cacheKey = '${type.toString()}_$id';
     if (_artworkCache.containsKey(cacheKey)) return _artworkCache[cacheKey];
 
-    final Uint8List? artwork = await _audioQuery.queryArtwork(id, type, format: ArtworkFormat.PNG, size: 2048);
+    final Uint8List? artwork = await _audioQuery.queryArtwork(id, type,
+        format: ArtworkFormat.PNG, size: 2048);
     if (artwork != null) _artworkCache[cacheKey] = artwork;
     return artwork;
   }
@@ -186,22 +188,34 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final searchResult = await _yt.search.getVideos(query);
-      final List<Song> songs = [];
-      for (var video in searchResult) {
-        songs.add(Song(
-          id: video.id.value,
-          title: video.title,
-          artist: video.author,
-          thumbUrl: video.thumbnails.highResUrl,
-          type: 'youtube',
-          duration: video.duration,
-        ));
+      final response = await http.get(Uri.parse(
+          'https://music-three-woad.vercel.app/search/songs?query=${Uri.encodeComponent(query)}'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<Song> results = [];
+        for (var item in data['data']['results']) {
+          final downloadUrl = item['downloadUrl'].last['link'];
+          if (downloadUrl == null) continue;
+
+          // For crisp quality, get the 500x500 image
+          final imageUrl = item['image'].last['link'];
+
+          results.add(Song(
+            id: downloadUrl,
+            title: item['name'] ?? 'Unknown Title',
+            artist: item['primaryArtists'] ?? 'Unknown Artist',
+            thumbUrl: imageUrl,
+            type: 'saavn',
+            duration: Duration(seconds: int.parse(item['duration'])),
+          ));
+        }
+        _searchResults = results;
+      } else {
+        _errorMessage = "Failed to get search results from Saavn API.";
       }
-      _searchResults = songs;
     } catch (e) {
-       _errorMessage = "Failed to get search results.";
-       notifyListeners();
+      _errorMessage = "Failed to connect to Saavn service.";
+      print("Saavn search error: $e");
     } finally {
       _isSearching = false;
       notifyListeners();
@@ -215,12 +229,15 @@ class MusicProvider with ChangeNotifier {
       _loadingSongId = song.id;
       notifyListeners();
 
-      if (song.type == 'youtube') {
+      if (song.type == 'saavn') {
+        // For Saavn songs, create a new queue with the selected song and play it.
         final mediaItem = _songToMediaItem(song);
-        await _audioHandler!.playMediaItem(mediaItem);
+        await _audioHandler!.updateQueue([mediaItem]);
+        await _audioHandler!.play();
       } else {
-        List<Song> queueToPlay = newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
-        // If we are playing a song from an album, the queue needs to be updated first.
+        // For local songs, use the existing queue logic.
+        List<Song> queueToPlay =
+            newQueue ?? (_isShuffleEnabled ? _shuffledSongs : _localSongs);
         if (newQueue != null) {
           await _updateQueueWithSongs(queueToPlay);
         }
@@ -244,7 +261,6 @@ class MusicProvider with ChangeNotifier {
     }
   }
 
-
   Future<void> _updateQueueWithSongs(List<Song> songs) async {
     final mediaItems = songs.map((s) => _songToMediaItem(s)).toList();
     await _audioHandler!.updateQueue(mediaItems);
@@ -252,19 +268,21 @@ class MusicProvider with ChangeNotifier {
 
   MediaItem _songToMediaItem(Song s) {
     return MediaItem(
-      id: s.id, 
-      album: s.type == 'local' ? "Local Music" : "YouTube",
+      id: s.id,
+      album: s.type == 'saavn' ? "Saavn" : "Local Music",
       title: s.title,
       artist: s.artist,
-      artUri: s.type == 'youtube' ? Uri.parse(s.thumbUrl) : null,
+      artUri: s.type == 'saavn' ? Uri.parse(s.thumbUrl) : null,
       genre: s.type,
       duration: s.duration,
-      extras: {'artworkId': s.localId, 'albumId': s.albumId, 'videoId': s.id},
+      extras: {'artworkId': s.localId, 'albumId': s.albumId},
     );
   }
 
   void togglePlayPause() {
-    _audioHandler?.playbackState.value.playing == true ? _audioHandler!.pause() : _audioHandler!.play();
+    _audioHandler?.playbackState.value.playing == true
+        ? _audioHandler!.pause()
+        : _audioHandler!.play();
   }
 
   void next() => _audioHandler?.skipToNext();
@@ -281,7 +299,7 @@ class MusicProvider with ChangeNotifier {
 
     if (nextMode != null) {
       _repeatMode = nextMode;
-      notifyListeners(); 
+      notifyListeners();
       _audioHandler!.setRepeatMode(nextMode);
     }
   }
@@ -289,7 +307,9 @@ class MusicProvider with ChangeNotifier {
   void toggleShuffle() {
     if (_audioHandler == null) return;
     _isShuffleEnabled = !_isShuffleEnabled;
-    final newMode = _isShuffleEnabled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none;
+    final newMode = _isShuffleEnabled
+        ? AudioServiceShuffleMode.all
+        : AudioServiceShuffleMode.none;
     _audioHandler!.setShuffleMode(newMode);
 
     if (_isShuffleEnabled) {
@@ -316,7 +336,6 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _yt.close();
     super.dispose();
   }
 }

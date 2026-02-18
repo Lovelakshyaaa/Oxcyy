@@ -2,12 +2,9 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart' as just;
-import 'package:media_kit/media_kit.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import 'package:oxcy/services/decipher_service.dart';
 import 'package:rxdart/rxdart.dart';
 
-// The new, robust AudioHandler that manages two players.
+// The simplified AudioHandler for local files only.
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
     builder: () => MyAudioHandler(),
@@ -23,18 +20,9 @@ Future<AudioHandler> initAudioService() async {
 }
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  // Two players: one for local files, one for YouTube streams.
-  final _justPlayer = just.AudioPlayer();
-  final _mediaKitPlayer = Player();
-
-  final _playlist = just.ConcatenatingAudioSource(useLazyPreparation: true, children: []);
-
-  // YouTube and Decipher services
-  static final _yt = YoutubeExplode();
-  static final _decipherService = DecipherService();
-
-  // To keep track of which player is currently in use
-  var _activePlayer = 'none'; // can be 'just', 'media_kit', or 'none'
+  final _player = just.AudioPlayer();
+  final _playlist =
+      just.ConcatenatingAudioSource(useLazyPreparation: true, children: []);
 
   MyAudioHandler() {
     _init();
@@ -44,166 +32,96 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
 
-    await _decipherService.init();
+    // Listen to state changes from the player and pipe them to the UI
+    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
 
-    // Listen to state changes from BOTH players and pipe them to the UI
-    _listenToJustPlayerStates();
-    _listenToMediaKitPlayerStates();
-
-    // Combine the playback states from both players
-    Rx.merge([
-      _justPlayer.playbackEventStream.where((_) => _activePlayer == 'just').map(_transformJustAudioEvent),
-      _mediaKitPlayer.stream.position.where((_) => _activePlayer == 'media_kit').map(_transformMediaKitEvent)
-    ]).pipe(playbackState);
-
-
-    // Set the initial audio source for local files
-    try {
-      await _justPlayer.setAudioSource(_playlist, preload: false);
-    } catch (e) {
-      print("Error setting initial audio source: $e");
-    }
-  }
-
-  // ---- Player State Listeners ----
-
-  void _listenToJustPlayerStates() {
-    _justPlayer.sequenceStateStream.listen((sequenceState) {
-       if (_activePlayer == 'just' && sequenceState != null) {
+    // Propagate all events from the audio player to AudioService clients.
+    _player.sequenceStateStream.listen((sequenceState) {
+      if (sequenceState != null) {
         final currentItem = sequenceState.currentSource?.tag as MediaItem?;
         if (currentItem != null) mediaItem.add(currentItem);
 
-        final currentQueue = sequenceState.sequence.map((s) => s.tag as MediaItem).toList();
+        final currentQueue =
+            sequenceState.sequence.map((s) => s.tag as MediaItem).toList();
         if (queue.value != currentQueue) {
           queue.add(currentQueue);
         }
       }
     });
-  }
 
-  void _listenToMediaKitPlayerStates() {
-    // Listen for the duration to become available and update the MediaItem.
-    _mediaKitPlayer.stream.duration.listen((duration) {
-      if (_activePlayer == 'media_kit') {
-        final currentMediaItem = mediaItem.value;
-        if (currentMediaItem != null && currentMediaItem.duration != duration) {
-          mediaItem.add(currentMediaItem.copyWith(duration: duration));
-        }
-      }
-    });
-
-    // Handle completion for media_kit
-    _mediaKitPlayer.stream.completed.listen((completed) {
-        if (completed && _activePlayer == 'media_kit') {
-           // Option: play next, stop, etc.
-           // For now, just indicate completion
-           final currentState = playbackState.value;
-           playbackState.add(currentState.copyWith(processingState: AudioProcessingState.completed));
-        }
-    });
-  }
-
-
-  // ---- Core Logic: Switching between players ----
-
-  @override
-  Future<void> playMediaItem(MediaItem mediaItem) async {
-    if (mediaItem.genre == 'youtube') {
-      _activePlayer = 'media_kit';
-      await _justPlayer.stop(); // Stop the other player
-      this.mediaItem.add(mediaItem); // Manually update the mediaItem
-      queue.add([mediaItem]); // Manually update the queue
-
-      try {
-        final url = await _getYouTubeStreamUrl(mediaItem.id);
-        await _mediaKitPlayer.open(Media(url), play: true);
-      } catch (e) {
-        print("Error playing YouTube stream: $e");
-      }
-
-    } else {
-      _activePlayer = 'just';
-      await _mediaKitPlayer.stop(); // Stop the other player
-      
-      final index = queue.value.indexWhere((item) => item.id == mediaItem.id);
-      if (index != -1) {
-        await _justPlayer.seek(Duration.zero, index: index);
-        await _justPlayer.play();
-      }
+    // Set the initial audio source
+    try {
+      await _player.setAudioSource(_playlist, preload: false);
+    } catch (e) {
+      print("Error setting initial audio source: $e");
     }
   }
 
+  // ---- Queue Management ----
+
   @override
   Future<void> updateQueue(List<MediaItem> newQueue) async {
-    final audioSources = newQueue.map((item) => just.AudioSource.uri(Uri.parse(item.id), tag: item)).toList();
+    final audioSources = newQueue
+        .map((item) => just.AudioSource.uri(Uri.parse(item.id), tag: item))
+        .toList();
     await _playlist.clear();
     await _playlist.addAll(audioSources);
     queue.add(newQueue);
   }
 
-
-  // ---- Playback Controls (Delegation) ----
-
-  @override
-  Future<void> play() async {
-    if (_activePlayer == 'media_kit') {
-      await _mediaKitPlayer.play();
-    } else {
-      await _justPlayer.play();
-    }
-  }
-
-  @override
-  Future<void> pause() async {
-    if (_activePlayer == 'media_kit') {
-      await _mediaKitPlayer.pause();
-    } else {
-      await _justPlayer.pause();
-    }
-  }
-
-  @override
-  Future<void> seek(Duration position) async {
-    if (_activePlayer == 'media_kit') {
-      await _mediaKitPlayer.seek(position);
-    } else {
-      await _justPlayer.seek(position);
-    }
-  }
-
-  @override
-  Future<void> skipToNext() => _justPlayer.seekToNext();
-
-  @override
-  Future<void> skipToPrevious() => _justPlayer.seekToPrevious();
-  
   @override
   Future<void> skipToQueueItem(int index) async {
-    if (_activePlayer == 'just') {
-      await _justPlayer.seek(Duration.zero, index: index);
-    }
+    await _player.seek(Duration.zero, index: index);
+    await _player.play();
   }
+
+  // ---- Playback Controls ----
+
+  @override
+  Future<void> play() => _player.play();
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> seek(Duration position) => _player.seek(position);
+
+  @override
+  Future<void> skipToNext() => _player.seekToNext();
+
+  @override
+  Future<void> skipToPrevious() => _player.seekToPrevious();
 
   @override
   Future<void> stop() async {
-    await _justPlayer.stop();
-    await _mediaKitPlayer.stop();
-    _activePlayer = 'none';
+    await _player.stop();
     await super.stop();
   }
 
+  @override
+  Future<void> playMediaItem(MediaItem item) async {
+    // This is now only for local files.
+    final index = queue.value.indexWhere((i) => i.id == item.id);
+    if (index != -1) {
+      await skipToQueueItem(index);
+    }
+  }
 
-  // ---- Event Transformers ----
+  // ---- Event Transformer ----
 
-  PlaybackState _transformJustAudioEvent(just.PlaybackEvent event) {
+  PlaybackState _transformEvent(just.PlaybackEvent event) {
     return PlaybackState(
       controls: [
-        if (_justPlayer.hasPrevious) MediaControl.skipToPrevious,
-        if (_justPlayer.playing) MediaControl.pause else MediaControl.play,
+        if (_player.hasPrevious) MediaControl.skipToPrevious,
+        if (_player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.stop,
-        if (_justPlayer.hasNext) MediaControl.skipToNext,
+        if (_player.hasNext) MediaControl.skipToNext,
       ],
-      systemActions: const {MediaAction.seek, MediaAction.seekForward, MediaAction.seekBackward},
+      systemActions: const {
+        MediaAction.seek,
+        MediaAction.seekForward,
+        MediaAction.seekBackward
+      },
       androidCompactActionIndices: const [0, 1, 3],
       processingState: const {
         just.ProcessingState.idle: AudioProcessingState.idle,
@@ -211,68 +129,31 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         just.ProcessingState.buffering: AudioProcessingState.buffering,
         just.ProcessingState.ready: AudioProcessingState.ready,
         just.ProcessingState.completed: AudioProcessingState.completed,
-      }[_justPlayer.processingState]!,
-      playing: _justPlayer.playing,
-      updatePosition: _justPlayer.position,
-      bufferedPosition: _justPlayer.bufferedPosition,
-      speed: _justPlayer.speed,
+      }[_player.processingState]!,
+      playing: _player.playing,
+      updatePosition: _player.position,
+      bufferedPosition: _player.bufferedPosition,
+      speed: _player.speed,
       queueIndex: event.currentIndex,
     );
   }
 
-  PlaybackState _transformMediaKitEvent(Duration position) {
-    final state = _mediaKitPlayer.state;
-    return PlaybackState(
-      controls: [
-        if (state.playing) MediaControl.pause else MediaControl.play,
-        MediaControl.stop,
-      ],
-      systemActions: const {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1],
-      processingState: {
-        true: AudioProcessingState.completed,
-        true: AudioProcessingState.buffering,
-      }[state.completed] ?? (state.playing ? AudioProcessingState.ready : AudioProcessingState.loading),
-      playing: state.playing,
-      updatePosition: position,
-      bufferedPosition: state.buffer,
-      speed: state.rate,
-      queueIndex: 0,
-    );
-  }
+  // ---- Repeat and Shuffle ----
 
-  // ---- Helper for YouTube ----
-  Future<String> _getYouTubeStreamUrl(String videoId) async {
-      final manifest = await _yt.videos.streamsClient.getManifest(videoId);
-      final streamInfo = manifest.audioOnly.withHighestBitrate();
-      final originalUrl = streamInfo.url;
-
-      if (originalUrl.queryParameters.containsKey('s')) {
-        final cipheredSignature = originalUrl.queryParameters['s']!;
-        final solvedSignature = await _decipherService.decipher(cipheredSignature);
-        final newQueryParameters = Map<String, String>.from(originalUrl.queryParameters)
-          ..remove('s')
-          ..addAll({'n': solvedSignature});
-        return originalUrl.replace(queryParameters: newQueryParameters).toString();
-      } else {
-        return originalUrl.toString();
-      }
-  }
-
-  // --- Unimplemented dual-player methods ---
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
-    await _justPlayer.setLoopMode(const {
-        AudioServiceRepeatMode.none: just.LoopMode.off,
-        AudioServiceRepeatMode.one: just.LoopMode.one,
-        AudioServiceRepeatMode.all: just.LoopMode.all,
-        AudioServiceRepeatMode.group: just.LoopMode.all,
-      }[repeatMode] ?? just.LoopMode.off
-    );
+    await _player.setLoopMode(const {
+          AudioServiceRepeatMode.none: just.LoopMode.off,
+          AudioServiceRepeatMode.one: just.LoopMode.one,
+          AudioServiceRepeatMode.all: just.LoopMode.all,
+          AudioServiceRepeatMode.group: just.LoopMode.all,
+        }[repeatMode] ??
+        just.LoopMode.off);
   }
 
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
-    await _justPlayer.setShuffleModeEnabled(shuffleMode == AudioServiceShuffleMode.all);
+    await _player
+        .setShuffleModeEnabled(shuffleMode == AudioServiceShuffleMode.all);
   }
 }

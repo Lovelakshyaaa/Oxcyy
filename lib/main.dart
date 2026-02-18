@@ -131,7 +131,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                       if (!snapshot.hasData) return const SizedBox.shrink();
                       return AnimatedPositioned(
                         duration: const Duration(milliseconds: 500),
-                        curve: Curves.fastOutSlowIn, 
+                        curve: Curves.fastOutSlowIn,
                         left: 0,
                         right: 0,
                         bottom: provider.isPlayerExpanded ? 0 : 85,
