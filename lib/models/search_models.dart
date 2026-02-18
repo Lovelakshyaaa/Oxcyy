@@ -27,7 +27,7 @@ class Album extends TopQueryResult {
   });
 }
 
-class Playlist {
+class Playlist extends TopQueryResult {
   final String id;
   final String title;
   final String imageUrl;
@@ -36,7 +36,7 @@ class Playlist {
   Playlist({required this.id, required this.title, required this.imageUrl, this.subtitle});
 }
 
-class Chart {
+class Chart extends TopQueryResult {
   final String id;
   final String title;
   final String imageUrl;

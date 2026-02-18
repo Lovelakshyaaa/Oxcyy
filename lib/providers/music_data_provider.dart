@@ -2,29 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:oxcy/models/search_models.dart'; // We will reuse this for Song and Artist for now
+import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
 
-
-
-class Playlist {
-  final String id;
-  final String title;
-  final String imageUrl;
-  final String? subtitle;
-
-  Playlist({required this.id, required this.title, required this.imageUrl, this.subtitle});
-}
-
-class Chart {
-  final String id;
-  final String title;
-  final String imageUrl;
-
-  Chart({required this.id, required this.title, required this.imageUrl});
-}
-
-// --- Provider ---
 
 class MusicData with ChangeNotifier {
   final String _baseUrl = "https://music-three-woad.vercel.app";
@@ -35,11 +15,9 @@ class MusicData with ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  // Holds all the data from the /modules endpoint
   Map<String, List<dynamic>> _modules = {};
   Map<String, List<dynamic>> get modules => _modules;
 
-  // Holds search results
   bool _isSearching = false;
   bool get isSearching => _isSearching;
   List<dynamic> _searchResults = [];
@@ -59,9 +37,8 @@ class MusicData with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body)['data'];
-        _modules.clear(); // Clear old data
+        _modules.clear();
 
-        // --- Parse all modules from the endpoint ---
         if (data['trending'] != null && data['trending']['songs'] is List) {
           _modules['trending_songs'] = (data['trending']['songs'] as List)
               .map((item) => buildSong(item))
@@ -86,13 +63,12 @@ class MusicData with ChangeNotifier {
               .whereType<Chart>()
               .toList();
         }
-         if (data['albums'] != null && data['albums'] is List) {
+        if (data['albums'] != null && data['albums'] is List) {
           _modules['albums'] = (data['albums'] as List)
               .map((item) => buildAlbum(item))
               .whereType<Album>()
               .toList();
         }
-
       } else {
         _errorMessage = "Failed to load essential app data. Please restart.";
       }
@@ -116,16 +92,46 @@ class MusicData with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/search?q=${Uri.encodeComponent(query)}'));
+      final response = await http.get(Uri.parse('$_baseUrl/search/all?query=${Uri.encodeComponent(query)}'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body)['data'];
         _searchResults.clear();
-        if (data['results'] is List) {
-          _searchResults = (data['results'] as List)
+        
+        final topQueryResults = data['topQuery']?['results'];
+        if (topQueryResults is List) {
+           _searchResults.addAll(topQueryResults
               .map((item) => _parseSearchResultItem(item))
-              .whereType<dynamic>()
-              .toList();
+              .whereType<dynamic>());
         }
+
+        final songsResults = data['songs']?['results'];
+        if (songsResults is List) {
+           _searchResults.addAll(songsResults
+              .map((item) => _parseSearchResultItem(item))
+              .whereType<dynamic>());
+        }
+
+        final albumsResults = data['albums']?['results'];
+        if (albumsResults is List) {
+           _searchResults.addAll(albumsResults
+              .map((item) => _parseSearchResultItem(item))
+              .whereType<dynamic>());
+        }
+
+        final artistsResults = data['artists']?['results'];
+        if (artistsResults is List) {
+           _searchResults.addAll(artistsResults
+              .map((item) => _parseSearchResultItem(item))
+              .whereType<dynamic>());
+        }
+
+        final playlistsResults = data['playlists']?['results'];
+        if (playlistsResults is List) {
+           _searchResults.addAll(playlistsResults
+              .map((item) => _parseSearchResultItem(item))
+              .whereType<dynamic>());
+        }
+
       } else {
         _errorMessage = "Search failed.";
       }
@@ -142,8 +148,6 @@ class MusicData with ChangeNotifier {
     _searchResults.clear();
     notifyListeners();
   }
-
- // --- PARSING HELPERS ---
 
   dynamic _parseSearchResultItem(Map<String, dynamic> item) {
     switch (item['type']) {
@@ -194,7 +198,7 @@ class MusicData with ChangeNotifier {
     }
   }
 
-   Album? buildAlbum(Map<String, dynamic> item) {
+  Album? buildAlbum(Map<String, dynamic> item) {
     try {
       if (item['id'] == null) return null;
       return Album(
@@ -238,12 +242,15 @@ class MusicData with ChangeNotifier {
     }
   }
 
-  // --- UTILITY PARSERS ---
-
   String _getArtistName(Map<String, dynamic> item) {
-    if (item['primaryArtists'] is String && (item['primaryArtists'] as String).isNotEmpty) return item['primaryArtists'];
+    if (item['primaryArtists'] is String &&
+        (item['primaryArtists'] as String).isNotEmpty) return item['primaryArtists'];
     if (item['primaryArtists'] is List && (item['primaryArtists'] as List).isNotEmpty) {
       return (item['primaryArtists'] as List).map((a) => a['name']).join(', ');
+    }
+    if (item['artists'] is String && (item['artists'] as String).isNotEmpty) return item['artists'];
+    if (item['artists'] is List && (item['artists'] as List).isNotEmpty) {
+      return (item['artists'] as List).map((a) => a['name']).join(', ');
     }
     return 'Unknown Artist';
   }
@@ -259,21 +266,17 @@ class MusicData with ChangeNotifier {
 
   String _getImageUrl(dynamic imageField) {
     if (imageField is List && imageField.isNotEmpty) {
-      final imageMap = imageField.firstWhere((i) => i['quality'] == '500x500', 
-                        orElse: () => imageField.firstWhere((i) => i['quality'] == '150x150', 
-                        orElse: () => imageField.last));
-      return imageMap['link'] ?? '';
+      return imageField.last['link'] ?? '';
     }
+    if (imageField is String) return imageField;
     return '';
   }
 
   String? _getDownloadUrl(dynamic urlField) {
-     if (urlField is List && urlField.isNotEmpty) {
-      final urlMap = urlField.firstWhere((u) => u['quality'] == '320kbps', 
-                    orElse: () => urlField.firstWhere((u) => u['quality'] == '160kbps', 
-                    orElse: () => urlField.last));
-      return urlMap['link'];
+    if (urlField is List && urlField.isNotEmpty) {
+      return urlField.last['link'];
     }
+    if (urlField is String) return urlField;
     return null;
   }
 }
