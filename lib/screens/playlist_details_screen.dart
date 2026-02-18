@@ -28,7 +28,7 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> {
 
   Future<Map<String, dynamic>> _fetchPlaylistDetails() async {
     try {
-      final playlistResponse = await http.get(Uri.parse('$_baseUrl/playlist?id=${widget.playlistId}'));
+      final playlistResponse = await http.get(Uri.parse('$_baseUrl/playlists?id=${widget.playlistId}'));
 
       if (playlistResponse.statusCode == 200) {
         final musicData = Provider.of<MusicData>(context, listen: false);

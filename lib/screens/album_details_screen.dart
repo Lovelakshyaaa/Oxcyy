@@ -28,7 +28,7 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
 
   Future<Map<String, dynamic>> _fetchAlbumDetails() async {
     try {
-      final albumResponse = await http.get(Uri.parse('$_baseUrl/album?id=${widget.albumId}'));
+      final albumResponse = await http.get(Uri.parse('$_baseUrl/albums?id=${widget.albumId}'));
 
       if (albumResponse.statusCode == 200) {
         final musicData = Provider.of<MusicData>(context, listen: false);
