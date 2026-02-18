@@ -1,0 +1,3182 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "JioSaavn API",
+    "description": "An unofficial wrapper for the JioSaavn API.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "https://music-three-woad.vercel.app"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Docs"
+    },
+    {
+      "name": "Modules"
+    },
+    {
+      "name": "Song"
+    },
+    {
+      "name": "Album"
+    },
+    {
+      "name": "Playlist"
+    },
+    {
+      "name": "Artist"
+    },
+    {
+      "name": "Search"
+    },
+    {
+      "name": "Show"
+    },
+    {
+      "name": "Get"
+    },
+    {
+      "name": "Radio"
+    },
+    {
+      "name": "Ping"
+    }
+  ],
+  "paths": {
+    "/openapi.json": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "OpenAPI document",
+        "description": "Returns the OpenAPI 3.1 JSON document for this API.",
+        "responses": {
+          "200": {
+            "description": "OpenAPI document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/docs": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "API reference (Scalar)",
+        "description": "Interactive API reference powered by Scalar.",
+        "responses": {
+          "200": {
+            "description": "HTML page",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/modules": {
+      "get": {
+        "tags": [
+          "Modules"
+        ],
+        "summary": "Home modules / launch data",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/song": {
+      "get": {
+        "tags": [
+          "Song"
+        ],
+        "summary": "Song details",
+        "description": "Fetch song details by `id` (supports comma-separated IDs) or by `link`/`token`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Song ID(s). You can pass comma-separated IDs.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6r5d1x0b"
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "JioSaavn song link (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "JioSaavn token (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/song/recommend": {
+      "get": {
+        "tags": [
+          "Song"
+        ],
+        "summary": "Song recommendations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Song ID.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "6r5d1x0b"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/album": {
+      "get": {
+        "tags": [
+          "Album"
+        ],
+        "summary": "Album details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Album ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "JioSaavn album link (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "JioSaavn token (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/album/recommend": {
+      "get": {
+        "tags": [
+          "Album"
+        ],
+        "summary": "Album recommendations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Album ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/album/same-year": {
+      "get": {
+        "tags": [
+          "Album"
+        ],
+        "summary": "Albums from the same year",
+        "parameters": [
+          {
+            "name": "year",
+            "in": "query",
+            "required": true,
+            "description": "Album year (e.g. 2020).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2020"
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/playlist": {
+      "get": {
+        "tags": [
+          "Playlist"
+        ],
+        "summary": "Playlist details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Playlist ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "JioSaavn playlist link (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "JioSaavn token (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/playlist/recommend": {
+      "get": {
+        "tags": [
+          "Playlist"
+        ],
+        "summary": "Playlist recommendations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Playlist ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artist": {
+      "get": {
+        "tags": [
+          "Artist"
+        ],
+        "summary": "Artist details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Artist ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "JioSaavn artist link (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "JioSaavn token (alternative to `id`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "1"
+          },
+          {
+            "name": "n_song",
+            "in": "query",
+            "description": "Number of songs.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "10"
+          },
+          {
+            "name": "n_album",
+            "in": "query",
+            "description": "Number of albums.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "10"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artist/songs": {
+      "get": {
+        "tags": [
+          "Artist"
+        ],
+        "summary": "Artist songs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Artist ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cat",
+            "in": "query",
+            "description": "Category (e.g. latest, alphabetical).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order (asc/desc).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artist/albums": {
+      "get": {
+        "tags": [
+          "Artist"
+        ],
+        "summary": "Artist albums",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Artist ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cat",
+            "in": "query",
+            "description": "Category (e.g. latest, alphabetical).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order (asc/desc).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artist/top-songs": {
+      "get": {
+        "tags": [
+          "Artist"
+        ],
+        "summary": "Artist top songs",
+        "parameters": [
+          {
+            "name": "artist_id",
+            "in": "query",
+            "required": true,
+            "description": "Artist ID(s).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "song_id",
+            "in": "query",
+            "required": true,
+            "description": "Seed song ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cat",
+            "in": "query",
+            "description": "Category (latest, alphabetical, popularity).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order (asc/desc).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/artist/recommend": {
+      "get": {
+        "tags": [
+          "Artist"
+        ],
+        "summary": "Artist recommendations",
+        "description": "Uses the same underlying endpoint as `/artist/top-songs`.",
+        "parameters": [
+          {
+            "name": "artist_id",
+            "in": "query",
+            "required": true,
+            "description": "Artist ID(s).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "song_id",
+            "in": "query",
+            "required": true,
+            "description": "Seed song ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cat",
+            "in": "query",
+            "description": "Category (latest, alphabetical, popularity).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order (asc/desc).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search (all)",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "arijit singh"
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/top": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Top searches",
+        "parameters": [
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/{path}": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search by entity",
+        "description": "Search songs/albums/playlists/artists via `/search/{path}`.",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "description": "Entity type.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "songs",
+                "albums",
+                "playlists",
+                "artists"
+              ]
+            },
+            "example": "songs"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n",
+            "in": "query",
+            "description": "Number of results per page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/podcasts": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search podcasts",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n",
+            "in": "query",
+            "description": "Number of results per page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/show": {
+      "get": {
+        "tags": [
+          "Show"
+        ],
+        "summary": "Show details",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "description": "JioSaavn show token.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "JioSaavn show link.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "Season number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/show/episode": {
+      "get": {
+        "tags": [
+          "Show"
+        ],
+        "summary": "Episode details",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "description": "Episode token.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "Episode link.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "Season number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/show/episodes": {
+      "get": {
+        "tags": [
+          "Show"
+        ],
+        "summary": "All episodes for a show",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Show ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "season",
+            "in": "query",
+            "description": "Season number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/trending": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Trending",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Entity type: song | album | playlist.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "song",
+                "album",
+                "playlist"
+              ]
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/{path}": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Get collections",
+        "description": "Get featured-playlists, charts, top-shows, top-artists, top-albums, featured-stations.",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "description": "Collection type.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "featured-playlists",
+                "charts",
+                "top-shows",
+                "top-artists",
+                "top-albums",
+                "featured-stations"
+              ]
+            },
+            "example": "charts"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n",
+            "in": "query",
+            "description": "Number of items per page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/actor-top-songs": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Actor top songs",
+        "parameters": [
+          {
+            "name": "actor_id",
+            "in": "query",
+            "required": true,
+            "description": "Actor ID(s).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "song_id",
+            "in": "query",
+            "required": true,
+            "description": "Seed song ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/footer-details": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Footer details",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n",
+            "in": "query",
+            "description": "Number of items.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/lyrics": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Lyrics",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Lyrics ID / Song ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/synced-lyrics": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Synced lyrics (LRCLIB)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Song ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "Song link.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "Song token.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "track",
+            "in": "query",
+            "description": "Track name (if not using song id/link/token).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artist",
+            "in": "query",
+            "description": "Artist name (if not using song id/link/token).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "duration",
+            "in": "query",
+            "description": "Track duration in seconds (recommended).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/mix": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Mix details",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "description": "Mix token.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "Mix link.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n",
+            "in": "query",
+            "description": "Items per page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/label": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Label details",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "description": "Label token.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "link",
+            "in": "query",
+            "description": "Label link.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n_song",
+            "in": "query",
+            "description": "Number of songs.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n_album",
+            "in": "query",
+            "description": "Number of albums.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cat",
+            "in": "query",
+            "description": "Category.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort order.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/get/mega-menu": {
+      "get": {
+        "tags": [
+          "Get"
+        ],
+        "summary": "Mega menu",
+        "parameters": [
+          {
+            "name": "entity",
+            "in": "query",
+            "description": "Whether to fetch entity page menu.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/radio/{path}": {
+      "get": {
+        "tags": [
+          "Radio"
+        ],
+        "summary": "Create radio station",
+        "description": "Create a featured/artist/entity radio station. Note: the actual route also supports `/radio/create/{...}`.",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "description": "Station type.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "featured",
+                "artist",
+                "entity"
+              ]
+            },
+            "example": "featured"
+          },
+          {
+            "name": "song_id",
+            "in": "query",
+            "description": "Song ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artist_id",
+            "in": "query",
+            "description": "Artist ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "description": "Entity ID (for entity radio).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Entity type (for entity radio).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Station name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "description": "Mode.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "description": "Comma-separated languages (e.g. `hindi,english`). Defaults to `hindi,english`.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "hindi,english"
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/radio/songs": {
+      "get": {
+        "tags": [
+          "Radio"
+        ],
+        "summary": "Get radio songs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Station ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "n",
+            "in": "query",
+            "description": "Number of songs (default 10).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "10"
+          },
+          {
+            "name": "mini",
+            "in": "query",
+            "description": "If true, returns a smaller payload (when supported).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "raw",
+            "in": "query",
+            "description": "If true, returns the raw JioSaavn response (bypasses this API's payload formatting).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "camel",
+            "in": "query",
+            "description": "If provided, converts JSON response keys to camelCase (post-processing middleware).",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ping": {
+      "get": {
+        "tags": [
+          "Ping"
+        ],
+        "summary": "Ping",
+        "description": "Debug route. Echoes request URL + headers.",
+        "responses": {
+          "200": {
+            "description": "Plaintext response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "Success"
+          },
+          "message": {
+            "type": "string",
+            "example": "✅ OK"
+          },
+          "data": {
+            "description": "Response payload.",
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "data"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "Failed"
+          },
+          "message": {
+            "type": "string",
+            "example": "❌ Something went wrong"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {}
+            ],
+            "example": null
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "data"
+        ]
+      },
+      "RateLimitResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "Failed"
+          },
+          "message": {
+            "type": "string",
+            "example": "You have exceeded the rate limit. Please try again later."
+          },
+          "limit": {
+            "type": "number",
+            "example": 5
+          },
+          "remaining": {
+            "type": "number",
+            "example": 0
+          },
+          "reset": {
+            "type": "string",
+            "example": "250ms"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ]
+      }
+    }
+  }
+}

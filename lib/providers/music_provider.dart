@@ -189,38 +189,79 @@ class MusicProvider with ChangeNotifier {
 
     try {
       final response = await http.get(Uri.parse(
-          'https://music-three-woad.vercel.app/search/songs?query=${Uri.encodeComponent(query)}'));
+          'https://music-three-woad.vercel.app/search/songs?q=${Uri.encodeComponent(query)}'));
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final List<Song> results = [];
-        for (var item in data['data']['results']) {
-          final downloadUrl = item['downloadUrl'].last['link'];
-          if (downloadUrl == null) continue;
 
-          // For crisp quality, get the 500x500 image
-          final imageUrl = item['image'].last['link'];
+        if (data['data'] != null && data['data']['results'] is List) {
+          for (var item in (data['data']['results'] as List)) {
+            try {
+              // --- Defensive URL Parsing ---
+              String? downloadUrl;
+              if (item['downloadUrl'] is List && (item['downloadUrl'] as List).isNotEmpty) {
+                  final lastUrl = (item['downloadUrl'] as List).last;
+                  if (lastUrl is Map && lastUrl.containsKey('link')) {
+                    downloadUrl = lastUrl['link'];
+                  }
+              }
+              if (downloadUrl == null) continue; // Skip if no valid download URL
 
-          results.add(Song(
-            id: downloadUrl,
-            title: item['name'] ?? 'Unknown Title',
-            artist: item['primaryArtists'] ?? 'Unknown Artist',
-            thumbUrl: imageUrl,
-            type: 'saavn',
-            duration: Duration(seconds: int.parse(item['duration'])),
-          ));
+              // --- Defensive Image Parsing ---
+              String imageUrl = '';
+              if (item['image'] is List && (item['image'] as List).isNotEmpty) {
+                  final lastImage = (item['image'] as List).last;
+                   if (lastImage is Map && lastImage.containsKey('link')) {
+                    imageUrl = lastImage['link'];
+                  }
+              }
+
+              // --- Defensive Artist Parsing ---
+              String artist = 'Unknown Artist';
+              if(item['primaryArtists'] is String) {
+                artist = item['primaryArtists'];
+              } else if (item['primaryArtists'] is List) {
+                artist = (item['primaryArtists'] as List).join(', ');
+              }
+
+              // --- Defensive Duration Parsing ---
+              Duration? duration;
+              if (item['duration'] is String) {
+                final seconds = int.tryParse(item['duration']);
+                if (seconds != null) {
+                  duration = Duration(seconds: seconds);
+                }
+              }
+
+              results.add(Song(
+                id: downloadUrl,
+                title: item['name'] as String? ?? 'Unknown Title',
+                artist: artist,
+                thumbUrl: imageUrl,
+                type: 'saavn',
+                duration: duration,
+              ));
+            } catch (e) {
+              print("Error parsing individual search item: $e");
+              // Optional: Log this error, but don't let one bad item stop the whole list.
+              continue;
+            }
+          }
         }
         _searchResults = results;
       } else {
-        _errorMessage = "Failed to get search results from Saavn API.";
+        _errorMessage = "API Error: Failed to get search results.";
       }
     } catch (e) {
-      _errorMessage = "Failed to connect to Saavn service.";
+      _errorMessage = "Network Error: Failed to connect to service.";
       print("Saavn search error: $e");
     } finally {
       _isSearching = false;
       notifyListeners();
     }
   }
+
 
   Future<void> play(Song song, {List<Song>? newQueue}) async {
     if (_audioHandler == null) return;
