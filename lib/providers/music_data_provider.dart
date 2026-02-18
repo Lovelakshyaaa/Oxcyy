@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
 
-
 class MusicData with ChangeNotifier {
   final String _baseUrl = "https://music-three-woad.vercel.app";
 
@@ -39,36 +38,34 @@ class MusicData with ChangeNotifier {
         final data = json.decode(response.body)['data'];
         _modules.clear();
 
-        if (data['trending'] != null && data['trending']['songs'] is List) {
-          _modules['trending_songs'] = (data['trending']['songs'] as List)
-              .map((item) => buildSong(item))
-              .whereType<Song>()
-              .toList();
+        // Correctly parse nested data from modules
+        if (data['trending']?['data'] is List) {
+          final trendingItems = data['trending']['data'] as List;
+          _modules['trending_songs'] = trendingItems.where((item) => item['type'] == 'song').map((item) => buildSong(item)).whereType<Song>().toList();
+          _modules['trending_albums'] = trendingItems.where((item) => item['type'] == 'album').map((item) => buildAlbum(item)).whereType<Album>().toList();
         }
-        if (data['trending'] != null && data['trending']['albums'] is List) {
-          _modules['trending_albums'] = (data['trending']['albums'] as List)
-              .map((item) => buildAlbum(item))
-              .whereType<Album>()
-              .toList();
-        }
-        if (data['playlists'] != null && data['playlists'] is List) {
-          _modules['playlists'] = (data['playlists'] as List)
+
+        if (data['playlists']?['data'] is List) {
+          _modules['playlists'] = (data['playlists']['data'] as List)
               .map((item) => buildPlaylist(item))
               .whereType<Playlist>()
               .toList();
         }
-        if (data['charts'] != null && data['charts'] is List) {
-          _modules['charts'] = (data['charts'] as List)
+
+        if (data['charts']?['data'] is List) {
+          _modules['charts'] = (data['charts']['data'] as List)
               .map((item) => buildChart(item))
               .whereType<Chart>()
               .toList();
         }
-        if (data['albums'] != null && data['albums'] is List) {
-          _modules['albums'] = (data['albums'] as List)
+
+        if (data['albums']?['data'] is List) {
+          _modules['albums'] = (data['albums']['data'] as List)
               .map((item) => buildAlbum(item))
               .whereType<Album>()
               .toList();
         }
+
       } else {
         _errorMessage = "Failed to load essential app data. Please restart.";
       }
@@ -92,42 +89,44 @@ class MusicData with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/search/all?query=${Uri.encodeComponent(query)}'));
+      // Use the correct search endpoint and query parameter
+      final response = await http.get(Uri.parse('$_baseUrl/search?q=${Uri.encodeComponent(query)}'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body)['data'];
         _searchResults.clear();
-        
+
+        // The rest of the parsing logic seems appropriate for the search results structure
         final topQueryResults = data['topQuery']?['results'];
         if (topQueryResults is List) {
-           _searchResults.addAll(topQueryResults
+          _searchResults.addAll(topQueryResults
               .map((item) => _parseSearchResultItem(item))
               .whereType<dynamic>());
         }
 
         final songsResults = data['songs']?['results'];
         if (songsResults is List) {
-           _searchResults.addAll(songsResults
+          _searchResults.addAll(songsResults
               .map((item) => _parseSearchResultItem(item))
               .whereType<dynamic>());
         }
 
         final albumsResults = data['albums']?['results'];
         if (albumsResults is List) {
-           _searchResults.addAll(albumsResults
+          _searchResults.addAll(albumsResults
               .map((item) => _parseSearchResultItem(item))
               .whereType<dynamic>());
         }
 
         final artistsResults = data['artists']?['results'];
         if (artistsResults is List) {
-           _searchResults.addAll(artistsResults
+          _searchResults.addAll(artistsResults
               .map((item) => _parseSearchResultItem(item))
               .whereType<dynamic>());
         }
 
         final playlistsResults = data['playlists']?['results'];
         if (playlistsResults is List) {
-           _searchResults.addAll(playlistsResults
+          _searchResults.addAll(playlistsResults
               .map((item) => _parseSearchResultItem(item))
               .whereType<dynamic>());
         }
@@ -243,8 +242,7 @@ class MusicData with ChangeNotifier {
   }
 
   String _getArtistName(Map<String, dynamic> item) {
-    if (item['primaryArtists'] is String &&
-        (item['primaryArtists'] as String).isNotEmpty) return item['primaryArtists'];
+    if (item['primaryArtists'] is String && (item['primaryArtists'] as String).isNotEmpty) return item['primaryArtists'];
     if (item['primaryArtists'] is List && (item['primaryArtists'] as List).isNotEmpty) {
       return (item['primaryArtists'] as List).map((a) => a['name']).join(', ');
     }
