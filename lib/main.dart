@@ -5,8 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/providers/search_provider.dart';
 import 'package:oxcy/screens/local_music_screen.dart';
-import 'package:oxcy/screens/home_screen.dart';
+import 'package:oxcy/screens/saavn_search_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 import 'package:oxcy/screens/splash_screen.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -16,8 +17,11 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized(); // Ensure bindings are initialized
   MediaKit.ensureInitialized(); // Initialize media_kit
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => MusicProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => MusicProvider()),
+        ChangeNotifierProvider(create: (context) => SearchProvider()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -66,7 +70,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   final List<Widget> _pages = [
     const LocalMusicScreen(),
-    HomeScreen(),
+    const SaavnSearchScreen(),
   ];
 
   @override
