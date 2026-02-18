@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/providers/music_data_provider.dart';
+import 'package:oxcy/providers/music_data_provider.dart' hide Album;
 import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 

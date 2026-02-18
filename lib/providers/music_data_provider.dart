@@ -3,18 +3,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:oxcy/models/search_models.dart'; // We will reuse this for Song and Artist for now
+import 'package:oxcy/providers/music_provider.dart';
 
-// --- Data Models ---
-// Simple models to represent the data from the API.
 
-class Album {
-  final String id;
-  final String title;
-  final String imageUrl;
-  final String? subtitle;
-
-  Album({required this.id, required this.title, required this.imageUrl, this.subtitle});
-}
 
 class Playlist {
   final String id;

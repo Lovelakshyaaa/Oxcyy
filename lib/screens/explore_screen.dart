@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:oxcy/models/search_models.dart';
-import 'package:oxcy/providers/music_data_provider.dart';
+import 'package:oxcy/providers/music_data_provider.dart' hide Playlist, Chart;
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/artist_details_screen.dart';
 import 'package:oxcy/screens/album_details_screen.dart';

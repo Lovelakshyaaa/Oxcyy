@@ -14,18 +14,36 @@ class Artist extends TopQueryResult {
 
 class Album extends TopQueryResult {
   final String id;
-  final String name;
+  final String title;
   final String imageUrl;
-  final String year;
+  final String? subtitle;
   final String type = 'album';
 
   Album({
     required this.id,
-    required this.name,
+    required this.title,
     required this.imageUrl,
-    required this.year,
+    this.subtitle,
   });
 }
+
+class Playlist {
+  final String id;
+  final String title;
+  final String imageUrl;
+  final String? subtitle;
+
+  Playlist({required this.id, required this.title, required this.imageUrl, this.subtitle});
+}
+
+class Chart {
+  final String id;
+  final String title;
+  final String imageUrl;
+
+  Chart({required this.id, required this.title, required this.imageUrl});
+}
+
 
 // We can extend the existing Song to be a TopQueryResult
 class SearchSong extends Song implements TopQueryResult {
