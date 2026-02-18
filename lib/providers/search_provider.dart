@@ -6,10 +6,9 @@ import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
 
 class SearchProvider with ChangeNotifier {
-  List<Song> _popularSongs = [];
-  List<Song> get popularSongs => _popularSongs;
+  List<dynamic> _popularResults = []; // Can hold both Songs and Artists
+  List<dynamic> get popularResults => _popularResults;
 
-  // New data structures for categorized search
   TopQueryResult? _topResult;
   TopQueryResult? get topResult => _topResult;
 
@@ -18,9 +17,6 @@ class SearchProvider with ChangeNotifier {
 
   List<Artist> _artistResults = [];
   List<Artist> get artistResults => _artistResults;
-
-  List<Album> _albumResults = [];
-  List<Album> get albumResults => _albumResults;
 
   bool _isFetchingPopular = false;
   bool get isFetchingPopular => _isFetchingPopular;
@@ -38,15 +34,59 @@ class SearchProvider with ChangeNotifier {
   int _currentPage = 1;
 
   SearchProvider() {
-    fetchPopularSongs();
+    fetchPopular();
   }
 
   void _clearAllResults() {
     _topResult = null;
     _songResults.clear();
     _artistResults.clear();
-    _albumResults.clear();
     _errorMessage = null;
+  }
+
+  Future<void> fetchPopular() async {
+    if (_isFetchingPopular) return;
+    _isFetchingPopular = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await http.get(Uri.parse('https://saavn.me/modules?language=hindi,english'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body)['data'];
+        final List<dynamic> results = [];
+
+        // Trending Songs (Albums are treated as songs here)
+        if (data['trending'] != null && data['trending']['albums'] is List) {
+          for (var item in (data['trending']['albums'] as List)) {
+            final song = _parseSongItem(item);
+            if (song != null) {
+              results.add(song);
+            }
+          }
+        }
+
+        // Top Artists
+        if (data['artists'] != null && data['artists'] is List) {
+          for (var item in (data['artists'] as List)) {
+            final artist = _parseArtistItem(item);
+            if (artist != null) {
+              results.add(artist);
+            }
+          }
+        }
+
+        _popularResults = results;
+      } else {
+        _errorMessage = "Could not fetch popular results.";
+      }
+    } catch (e) {
+      _errorMessage = "Network error while fetching popular results.";
+      print("Popular fetch error: $e");
+    } finally {
+      _isFetchingPopular = false;
+      notifyListeners();
+    }
   }
 
   Future<void> search(String query) async {
@@ -59,7 +99,7 @@ class SearchProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await http.get(Uri.parse('https://music-three-woad.vercel.app/search/all?q=${Uri.encodeComponent(query)}'));
+      final response = await http.get(Uri.parse('https://saavn.me/search/all?query=${Uri.encodeComponent(query)}'));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body)['data'];
@@ -77,7 +117,6 @@ class SearchProvider with ChangeNotifier {
   }
 
   void _parseAllResults(Map<String, dynamic> data) {
-     // Top Query
     if (data['topQuery'] != null && data['topQuery']['results'] is List) {
       final topQueryResults = data['topQuery']['results'] as List;
       if (topQueryResults.isNotEmpty) {
@@ -85,42 +124,14 @@ class SearchProvider with ChangeNotifier {
       }
     }
 
-    // Songs
     if (data['songs'] != null && data['songs']['results'] is List) {
       final songItems = data['songs']['results'] as List;
-      _songResults = songItems.map((item) => _parseSongItem(item)).where((s) => s != null).cast<Song>().toList();
+      _songResults = songItems.map((item) => _parseSongItem(item)).whereType<Song>().toList();
     }
 
-    // Artists
     if (data['artists'] != null && data['artists']['results'] is List) {
       final artistItems = data['artists']['results'] as List;
-      _artistResults = artistItems.map((item) => _parseArtistItem(item)).where((a) => a != null).cast<Artist>().toList();
-    }
-  }
-
-  Future<void> fetchMoreResults() async {
-    if (_currentQuery.isEmpty || _isFetchingMore || _isSearching) return;
-
-    _isFetchingMore = true;
-    notifyListeners();
-
-    _currentPage++;
-    try {
-        final response = await http.get(Uri.parse('https://music-three-woad.vercel.app/search/songs?q=${Uri.encodeComponent(_currentQuery)}&page=$_currentPage'));
-
-        if (response.statusCode == 200) {
-            final data = json.decode(response.body);
-            if (data['data'] != null && data['data']['results'] is List) {
-                final apiResults = data['data']['results'] as List;
-                final moreSongs = apiResults.map((item) => _parseSongItem(item)).where((s) => s != null).cast<Song>().toList();
-                _songResults.addAll(moreSongs);
-            }
-        }
-    } catch (e) {
-        print("Fetch more error: $e");
-    } finally {
-        _isFetchingMore = false;
-        notifyListeners();
+      _artistResults = artistItems.map((item) => _parseArtistItem(item)).whereType<Artist>().toList();
     }
   }
 
@@ -150,23 +161,43 @@ class SearchProvider with ChangeNotifier {
 
   Song? _parseSongItem(Map<String, dynamic> item) {
     try {
-      String? downloadUrl = _getDownloadUrl(item['downloadUrl']);
-      if (downloadUrl == null) return null; // Can't play it, don't show it
+      String? downloadUrl;
+      if (item['downloadUrl'] is List && (item['downloadUrl'] as List).isNotEmpty) {
+        final lastUrl = (item['downloadUrl'] as List).last;
+        if (lastUrl is Map && lastUrl.containsKey('link')) {
+          downloadUrl = lastUrl['link'];
+        }
+      }
+      if (downloadUrl == null) return null;
 
-      String artistName = 'Unknown Artist';
-      if (item['primaryArtists'] is String && (item['primaryArtists'] as String).isNotEmpty) {
-        artistName = item['primaryArtists'];
-      } else if (item['primaryArtists'] is List && (item['primaryArtists'] as List).isNotEmpty) {
-         artistName = (item['primaryArtists'] as List).map((artist) => artist['name'] as String? ?? '').join(', ');
+      String imageUrl = _getImageUrl(item['image']);
+
+      String artist = 'Unknown Artist';
+      if (item.containsKey('primaryArtists') && item['primaryArtists'] is String) {
+        artist = item['primaryArtists'];
+      } else if (item.containsKey('artists') && item['artists'] is List) {
+        artist = (item['artists'] as List).map((a) => a['name']).join(', ');
+      } else if (item.containsKey('primaryArtists') && item['primaryArtists'] is List) {
+        artist = (item['primaryArtists'] as List).map((a) => a['name']).join(', ');
+      }
+
+      Duration? duration;
+      if (item['duration'] is String) {
+        final seconds = int.tryParse(item['duration']);
+        if (seconds != null) {
+          duration = Duration(seconds: seconds);
+        }
+      } else if (item['duration'] is num) {
+        duration = Duration(seconds: (item['duration'] as num).toInt());
       }
 
       return Song(
         id: downloadUrl,
-        title: item['name'] ?? item['title'] ?? 'Unknown Title',
-        artist: artistName,
-        thumbUrl: _getImageUrl(item['image']),
+        title: item['name'] as String? ?? item['title'] as String? ?? 'Unknown Title',
+        artist: artist,
+        thumbUrl: imageUrl,
         type: 'saavn',
-        duration: item['duration'] != null ? Duration(seconds: int.parse(item['duration'])) : null,
+        duration: duration,
       );
     } catch (e) {
       print("Error parsing song item: $e");
@@ -175,48 +206,41 @@ class SearchProvider with ChangeNotifier {
   }
 
   String _getImageUrl(dynamic imageField) {
-      if (imageField is List && imageField.isNotEmpty) {
-          final imageMap = imageField.lastWhere((i) => i['quality'] == '500x500', orElse: () => imageField.last);
-          return imageMap['link'] ?? '';
-      }
-      return '';
-  }
-
-  String? _getDownloadUrl(dynamic urlField) {
-    if (urlField is List && urlField.isNotEmpty) {
-      final urlMap = urlField.lastWhere((u) => u['quality'] == '320kbps', orElse: () => urlField.last);
-      return urlMap['link'];
+    if (imageField is List && imageField.isNotEmpty) {
+      final imageMap = imageField.firstWhere((i) => i['quality'] == '500x500', orElse: () => imageField.last);
+      return imageMap['link'] ?? '';
     }
-    return null;
+    return '';
   }
 
-  // Keep the original fetchPopularSongs and clearSearch as they are still useful
-  Future<void> fetchPopularSongs() async {
-    if (_isFetchingPopular) return;
-    _isFetchingPopular = true;
-    _errorMessage = null;
+  Future<void> fetchMoreResults() async {
+    if (_currentQuery.isEmpty || _isFetchingMore || _isSearching) return;
+
+    _isFetchingMore = true;
     notifyListeners();
+
+    _currentPage++;
     try {
-      final response = await http.get(Uri.parse('https://music-three-woad.vercel.app/get/trending?type=song'));
+      final response = await http.get(Uri.parse('https://saavn.me/search/songs?query=${Uri.encodeComponent(_currentQuery)}&page=$_currentPage'));
+
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List<Song> trendResults = [];
-        if (data['data'] is List) {
-          for (var item in (data['data'] as List)) {
+        final data = json.decode(response.body)['data'];
+        final List<Song> moreResults = [];
+        if (data['results'] is List) {
+          final apiResults = data['results'] as List;
+          for (var item in apiResults) {
             final song = _parseSongItem(item);
             if (song != null) {
-              trendResults.add(song);
+              moreResults.add(song);
             }
           }
+          _songResults.addAll(moreResults);
         }
-        _popularSongs = trendResults;
-      } else {
-        _errorMessage = "Could not fetch trending songs.";
       }
     } catch (e) {
-      _errorMessage = "Network error while fetching trending songs.";
+      print("Fetch more error: $e");
     } finally {
-      _isFetchingPopular = false;
+      _isFetchingMore = false;
       notifyListeners();
     }
   }

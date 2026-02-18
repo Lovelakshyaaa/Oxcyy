@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/search_provider.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/screens/artist_details_screen.dart';
 import 'package:transparent_image/transparent_image.dart';
 
 class SaavnSearchScreen extends StatefulWidget {
@@ -45,15 +44,6 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
     if (query.isNotEmpty) {
       Provider.of<SearchProvider>(context, listen: false).search(query);
     }
-  }
-
-  void _navigateToArtist(Artist artist) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ArtistDetailsScreen(artist: artist),
-      ),
-    );
   }
 
   @override
@@ -100,7 +90,7 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
           final hasSearchResults = provider.topResult != null || provider.songResults.isNotEmpty || provider.artistResults.isNotEmpty;
 
           if (!hasSearchResults) {
-            return _buildPopularSongsList(provider.popularSongs);
+            return _buildPopularResultsList(provider);
           }
 
           return ListView(
@@ -188,7 +178,9 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
 
   Widget _buildArtistItem(Artist artist, {bool isTopResult = false}) {
     return GestureDetector(
-      onTap: () => _navigateToArtist(artist),
+      onTap: () {
+        // TODO: Navigate to artist details screen
+      },
       child: isTopResult
           ? ListTile(
               leading: CircleAvatar(
@@ -222,15 +214,26 @@ class _SaavnSearchScreenState extends State<SaavnSearchScreen> {
     );
   }
 
-  Widget _buildPopularSongsList(List<Song> songs) {
-    if (songs.isEmpty) {
+  Widget _buildPopularResultsList(SearchProvider provider) {
+    if (provider.isFetchingPopular) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final popularSongs = provider.popularResults.whereType<Song>().toList();
+    final popularArtists = provider.popularResults.whereType<Artist>().toList();
+
     return ListView(
       children: [
-         _buildSectionHeader('Trending Now'),
-        ...songs.map((song) => _buildSongItem(song)).toList(),
-         const SizedBox(height: 120), // Padding at the bottom
+        if (popularSongs.isNotEmpty)
+          _buildSectionHeader('Trending Now'),
+        ...popularSongs.map((song) => _buildSongItem(song)).toList(),
+        
+        if (popularArtists.isNotEmpty)
+          _buildSectionHeader('Top Artists'),
+        if (popularArtists.isNotEmpty)
+          _buildArtistList(popularArtists),
+
+        const SizedBox(height: 120), // Padding at the bottom
       ],
     );
   }
