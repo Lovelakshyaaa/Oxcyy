@@ -166,12 +166,8 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<SongModel>> getLocalSongsByAlbum(int albumId) async {
-    // Corrected the query to filter by albumId
-    return await _audioQuery.querySongs(
-        albumId: albumId,
-        sortType: SongSortType.TRACK,
-        orderType: OrderType.ASC_OR_SMALLER
-    );
+    // Permanently fixed query logic
+    return await _audioQuery.querySongs(filter: MediaFilter.forAlbums([albumId]));
   }
 
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {

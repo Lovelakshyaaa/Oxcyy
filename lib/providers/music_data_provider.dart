@@ -117,20 +117,17 @@ class MusicData with ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/search?q=${Uri.encodeComponent(query)}'));
+      final response = await http.get(Uri.parse('$_baseUrl/search/all?query=${Uri.encodeComponent(query)}'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body)['data'];
         _searchResults.clear();
+        List<dynamic> results = [];
+        if (data['songs'] != null) results.addAll(data['songs']['results']);
+        if (data['albums'] != null) results.addAll(data['albums']['results']);
+        if (data['artists'] != null) results.addAll(data['artists']['results']);
+        if (data['playlists'] != null) results.addAll(data['playlists']['results']);
 
-        final allResults = [
-          ...(data['topQuery']?['results'] as List? ?? []),
-          ...(data['songs']?['results'] as List? ?? []),
-          ...(data['albums']?['results'] as List? ?? []),
-          ...(data['artists']?['results'] as List? ?? []),
-          ...(data['playlists']?['results'] as List? ?? []),
-        ];
-
-        _searchResults = allResults.map((item) => _parseSearchResultItem(item)).where((item) => item != null).toList();
+        _searchResults = results.map((item) => _parseSearchResultItem(item)).where((item) => item != null).toList();
       } else {
         _errorMessage = "Search failed.";
       }
@@ -140,6 +137,11 @@ class MusicData with ChangeNotifier {
       _isSearching = false;
       notifyListeners();
     }
+  }
+  
+  void clearSearch() {
+      _searchResults.clear();
+      notifyListeners();
   }
 
   dynamic _parseSearchResultItem(Map<String, dynamic> item) {
