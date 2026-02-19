@@ -4,6 +4,7 @@ import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/models/search_models.dart';
 import 'dart:typed_data';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:just_audio/just_audio.dart'; // <--- ADDED IMPORT
 
 class PlayerScreen extends StatelessWidget {
   const PlayerScreen({Key? key}) : super(key: key);
@@ -92,9 +93,9 @@ class PlayerScreen extends StatelessWidget {
           const Spacer(),
           _buildArtwork(song, isExpanded: true),
           const SizedBox(height: 40),
-          Text(song.title, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center), // Corrected: headline5 -> headlineSmall
+          Text(song.title, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
           const SizedBox(height: 10),
-          Text(song.artist, style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center), // Corrected: subtitle1 -> titleMedium
+          Text(song.artist, style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
           const Spacer(),
           _buildProgressBar(context, musicProvider),
           _buildControls(context, musicProvider),

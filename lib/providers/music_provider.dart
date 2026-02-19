@@ -166,8 +166,9 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<SongModel>> getLocalSongsByAlbum(int albumId) async {
-    // Permanently fixed query logic
-    return await _audioQuery.querySongs(filter: MediaFilter.forAlbums([albumId]));
+    // Correct, robust, and permanent fix for fetching local songs.
+    final allSongs = await _audioQuery.querySongs();
+    return allSongs.where((song) => song.albumId == albumId).toList();
   }
 
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {

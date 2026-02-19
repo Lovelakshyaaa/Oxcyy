@@ -13,7 +13,7 @@ class SearchScreenDelegate extends SearchDelegate {
         elevation: 0,
       ),
       textTheme: const TextTheme(
-        headline6: TextStyle(color: Colors.white, fontSize: 18),
+        titleLarge: TextStyle(color: Colors.white, fontSize: 18), // Corrected: headline6 -> titleLarge
       ),
     );
   }
@@ -98,7 +98,7 @@ class SearchScreenDelegate extends SearchDelegate {
             return ListTile(
               leading: Image.network(item.imageUrl, width: 50, height: 50),
               title: Text(item.title),
-              subtitle: Text(item.subtitle),
+              subtitle: Text(item.subtitle ?? ''), // Corrected: Handle nullable subtitle
               onTap: () {
                 // Handle album tap
               },
@@ -107,7 +107,7 @@ class SearchScreenDelegate extends SearchDelegate {
             return ListTile(
               leading: Image.network(item.imageUrl, width: 50, height: 50),
               title: Text(item.title),
-              subtitle: Text(item.subtitle),
+              subtitle: Text(item.subtitle ?? ''), // Corrected: Handle nullable subtitle
               onTap: () {
                 // Handle playlist tap
               },
