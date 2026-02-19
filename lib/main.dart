@@ -1,41 +1,17 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:oxcy/screens/album_details_screen.dart';
+import 'package:oxcy/screens/local_music_screen.dart';
+import 'package:oxcy/screens/playlist_details_screen.dart';
+import 'package:oxcy/screens/search_screen_delegate.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:glassmorphism/glassmorphism.dart';
-import 'package:audio_service/audio_service.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/providers/music_data_provider.dart';
-import 'package:oxcy/screens/local_music_screen.dart';
 import 'package:oxcy/screens/explore_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
-import 'package:oxcy/screens/splash_screen.dart';
-import 'package:fluttertoast/fluttertoast.dart';
-import 'package:media_kit/media_kit.dart';
+import 'package:oxcy/widgets/mini_player.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  MediaKit.ensureInitialized();
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (context) => MusicProvider()),
-        ChangeNotifierProvider(create: (context) => MusicData()),
-      ],
-      child: const MyApp(),
-    ),
-  );
-}
-
-class BouncingScrollBehavior extends ScrollBehavior {
-  @override
-  Widget buildOverscrollIndicator(
-      BuildContext context, Widget child, ScrollableDetails details) {
-    return StretchingOverscrollIndicator(
-      axisDirection: details.direction,
-      child: child,
-    );
-  }
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -43,40 +19,51 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScrollConfiguration(
-      behavior: BouncingScrollBehavior(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => MusicProvider()),
+        ChangeNotifierProvider(create: (_) => MusicData()),
+      ],
       child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'OXCY',
+        title: 'OXY',
         theme: ThemeData.dark().copyWith(
-          scaffoldBackgroundColor: Colors.transparent,
-          textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+          scaffoldBackgroundColor: const Color(0xFF0F0C29),
+          primaryColor: const Color(0xFF24243E),
+          colorScheme: const ColorScheme.dark().copyWith(
+            primary: const Color(0xFFA248E2),
+            secondary: const Color(0xFF24243E),
+            surface: const Color(0xFF161334),
+          ),
         ),
-        home: const SplashScreen(),
+        home: const MainScreen(),
       ),
     );
   }
 }
 
-class MainScaffold extends StatefulWidget {
-  const MainScaffold({Key? key}) : super(key: key);
+class MainScreen extends StatefulWidget {
+  const MainScreen({Key? key}) : super(key: key);
 
   @override
-  _MainScaffoldState createState() => _MainScaffoldState();
+  _MainScreenState createState() => _MainScreenState();
 }
 
-class _MainScaffoldState extends State<MainScaffold> {
+class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-
-  final List<Widget> _pages = [
-    const LocalMusicScreen(),
-    const ExploreScreen(),
-  ];
+  final List<Widget> _screens = [const ExploreScreen(), const LocalMusicScreen()];
 
   @override
   void initState() {
     super.initState();
-    Provider.of<MusicProvider>(context, listen: false).fetchLocalMusic();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<MusicProvider>(context, listen: false).fetchLocalMusic();
+    });
+  }
+
+  void _showErrorSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+    );
   }
 
   @override
@@ -84,122 +71,73 @@ class _MainScaffoldState extends State<MainScaffold> {
     return Consumer<MusicProvider>(
       builder: (context, provider, child) {
         if (provider.errorMessage != null) {
-          Fluttertoast.showToast(
-            msg: provider.errorMessage!,
-            toastLength: Toast.LENGTH_LONG,
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: Colors.redAccent,
-            textColor: Colors.white,
-            fontSize: 16.0,
-          );
-          provider.clearError();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showErrorSnackBar(provider.errorMessage!); 
+            provider.clearError();
+          });
         }
-
-        final audioHandler = provider.audioHandler;
 
         return WillPopScope(
           onWillPop: () async {
             if (provider.isPlayerExpanded) {
               provider.collapsePlayer();
-              return false;
+              return false; 
             }
-            return true;
+            return true; 
           },
           child: Scaffold(
-            backgroundColor: const Color(0xFF0F0C29),
+            extendBody: true,
             body: Stack(
               children: [
-                Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF0F0C29),
-                        Color(0xFF302B63),
-                        Color(0xFF24243E)
-                      ],
-                    ),
-                  ),
-                ),
                 IndexedStack(
                   index: _currentIndex,
-                  children: _pages,
+                  children: _screens,
                 ),
-                if (audioHandler != null)
-                  StreamBuilder<MediaItem?>(
-                    stream: audioHandler.mediaItem,
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox.shrink();
-                      return AnimatedPositioned(
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.fastOutSlowIn,
-                        left: 0,
-                        right: 0,
-                        bottom: provider.isPlayerExpanded ? 0 : 85,
-                        top: provider.isPlayerExpanded ? 0 : null,
-                        child: const SmartPlayer(),
-                      );
-                    },
-                  ),
-                if (!provider.isPlayerExpanded)
-                  Positioned(
+                if (provider.currentSong != null)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    bottom: provider.isPlayerExpanded ? 0 : 85,
+                    top: provider.isPlayerExpanded ? 0 : null,
                     left: 0,
                     right: 0,
+                    child: GestureDetector(
+                      onVerticalDragEnd: (details) {
+                        if (!provider.isPlayerExpanded) {
+                          if (details.primaryVelocity! < -1500) { 
+                            provider.togglePlayerView();
+                          }
+                        } else {
+                          if (details.primaryVelocity! > 1500) { 
+                            provider.togglePlayerView();
+                          }
+                        }
+                      },
+                      child: const PlayerScreen(),
+                    ),
+                  ),
+                if (provider.currentSong != null && !provider.isPlayerExpanded)
+                  Positioned(
                     bottom: 0,
-                    child: _buildGlassNavBar(),
+                    left: 0,
+                    right: 0,
+                    child: MiniPlayer(),
                   ),
               ],
             ),
+            bottomNavigationBar: provider.isPlayerExpanded
+                ? null
+                : BottomNavigationBar(
+                    currentIndex: _currentIndex,
+                    onTap: (index) => setState(() => _currentIndex = index),
+                    items: const [
+                      BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
+                      BottomNavigationBarItem(icon: Icon(Icons.music_note), label: 'Local Music'),
+                    ],
+                  ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildGlassNavBar() {
-    return GlassmorphicContainer(
-      width: double.infinity,
-      height: 85,
-      borderRadius: 0,
-      blur: 10,
-      alignment: Alignment.center,
-      border: 1,
-      linearGradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withOpacity(0.1),
-          Colors.white.withOpacity(0.05),
-        ],
-      ),
-      borderGradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withOpacity(0.5),
-          Colors.white.withOpacity(0.2),
-        ],
-      ),
-      child: BottomNavigationBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        currentIndex: _currentIndex,
-        selectedItemColor: Colors.purpleAccent,
-        unselectedItemColor: Colors.white60,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.music_note_rounded),
-            label: "My Music",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.explore_rounded),
-            label: "Explore",
-          ),
-        ],
-      ),
     );
   }
 }

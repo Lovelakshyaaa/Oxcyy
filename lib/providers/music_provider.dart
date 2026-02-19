@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -21,8 +22,7 @@ class MusicProvider with ChangeNotifier {
 
   Duration _position = Duration.zero;
   Duration get position => _position;
-  
-  // --- RESTORED UI AND LOCAL STATE ---
+
   bool _isPlayerExpanded = false;
   bool get isPlayerExpanded => _isPlayerExpanded;
 
@@ -43,8 +43,6 @@ class MusicProvider with ChangeNotifier {
 
   bool _isShuffleEnabled = false;
   bool get isShuffleEnabled => _isShuffleEnabled;
-  // --- END RESTORED STATE ---
-
 
   MusicProvider() {
     _audioPlayer.playerStateStream.listen((playerState) {
@@ -67,44 +65,65 @@ class MusicProvider with ChangeNotifier {
     });
 
     _audioPlayer.loopModeStream.listen((mode) {
-        _repeatMode = mode;
-        notifyListeners();
+      _repeatMode = mode;
+      notifyListeners();
     });
 
     _audioPlayer.shuffleModeEnabledStream.listen((enabled) {
-        _isShuffleEnabled = enabled;
-        notifyListeners();
+      _isShuffleEnabled = enabled;
+      notifyListeners();
     });
   }
 
-  Future<void> play(Song song, {List<Song>? newQueue}) async {
-    _loadingSongId = song.id;
+  // Universal play method
+  Future<void> play(dynamic songObject, {List<dynamic>? newQueue}) async {
+    String? playId;
+    if (songObject is Song) playId = songObject.id;
+    if (songObject is SongModel) playId = songObject.id.toString();
+
+    _loadingSongId = playId;
     notifyListeners();
 
     try {
-      if (song.downloadUrl == null || song.downloadUrl!.isEmpty) {
-        final response = await http.get(Uri.parse('$_baseUrl/song?id=${song.id}'));
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body)['data'];
-          final songData = data is List ? data[0] : data;
-          final downloadUrl = _getDownloadUrl(songData['downloadUrl']);
-
-          if (downloadUrl != null) {
-            song.downloadUrl = downloadUrl;
+      String? urlToPlay;
+      if (songObject is Song) {
+        // It's an online song
+        _currentSong = songObject;
+        if (songObject.downloadUrl == null || songObject.downloadUrl!.isEmpty) {
+          final response = await http.get(Uri.parse('$_baseUrl/song?id=${songObject.id}'));
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body)['data'];
+            final songData = data is List ? data[0] : data;
+            urlToPlay = _getDownloadUrl(songData['downloadUrl']);
+            songObject.downloadUrl = urlToPlay;
           } else {
-             _setError('Playback error: Could not find a playable URL.');
+            _setError('Network error fetching song details.');
             return;
           }
         } else {
-          _setError('Network error fetching song details.');
-          return;
+          urlToPlay = songObject.downloadUrl;
         }
+      } else if (songObject is SongModel) {
+        // It's a local song, create a unified Song object for the player
+        _currentSong = Song(
+          id: songObject.id.toString(),
+          title: songObject.title,
+          artist: songObject.artist ?? 'Unknown Artist',
+          thumbUrl: '', // Local artwork is handled separately
+          downloadUrl: songObject.uri,
+          duration: Duration(milliseconds: songObject.duration ?? 0),
+        );
+        urlToPlay = songObject.uri;
+      } else {
+        _setError("Unsupported song type");
+        return;
       }
 
-      if (song.downloadUrl != null) {
-        await _audioPlayer.setUrl(song.downloadUrl!);
-        _currentSong = song;
+      if (urlToPlay != null && urlToPlay.isNotEmpty) {
+        await _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse(urlToPlay)));
         _audioPlayer.play();
+      } else {
+        _setError('Could not find a playable URL.');
       }
     } catch (e) {
       _setError("Error during playback setup: $e");
@@ -113,8 +132,7 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
     }
   }
-  
-  // --- RESTORED METHODS ---
+
   void _setError(String message) {
     _errorMessage = message;
     notifyListeners();
@@ -148,11 +166,16 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<SongModel>> getLocalSongsByAlbum(int albumId) async {
-    return await _audioQuery.querySongs(albumId: albumId, sortType: SongSortType.TRACK);
+    // Corrected the query to filter by albumId
+    return await _audioQuery.querySongs(
+        albumId: albumId,
+        sortType: SongSortType.TRACK,
+        orderType: OrderType.ASC_OR_SMALLER
+    );
   }
 
   Future<Uint8List?> getArtwork(int id, ArtworkType type) async {
-    return await _audioQuery.queryArtwork(id, type);
+    return await _audioQuery.queryArtwork(id, type, size: 200);
   }
 
   void togglePlayerView() {
@@ -164,7 +187,7 @@ class MusicProvider with ChangeNotifier {
     _isPlayerExpanded = false;
     notifyListeners();
   }
-  
+
   void cycleRepeatMode() {
     if (_repeatMode == LoopMode.off) {
       _audioPlayer.setLoopMode(LoopMode.one);
@@ -178,8 +201,6 @@ class MusicProvider with ChangeNotifier {
   void toggleShuffle() {
     _audioPlayer.setShuffleModeEnabled(!_isShuffleEnabled);
   }
-
-  // --- END RESTORED METHODS ---
 
   String? _getDownloadUrl(dynamic urlField) {
     if (urlField is List && urlField.isNotEmpty) {
@@ -205,7 +226,7 @@ class MusicProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _audio_player.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 }

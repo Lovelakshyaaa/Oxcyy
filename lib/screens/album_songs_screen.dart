@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:oxcy/models/search_models.dart'; // <--- ADD THIS IMPORT
+import 'package:oxcy/models/search_models.dart'; 
 import 'package:provider/provider.dart';
 import 'package:oxcy/providers/music_provider.dart';
+import 'dart:typed_data';
 
 class AlbumSongsScreen extends StatefulWidget {
-  final AlbumInfo album;
+  final AlbumModel album; // Corrected Type: Use AlbumModel from on_audio_query
 
   const AlbumSongsScreen({Key? key, required this.album}) : super(key: key);
 
@@ -14,7 +15,7 @@ class AlbumSongsScreen extends StatefulWidget {
 }
 
 class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
-  late Future<List<Song>> _albumSongsFuture;
+  late Future<List<SongModel>> _albumSongsFuture; // Corrected Type: Use SongModel
 
   @override
   void initState() {
@@ -30,8 +31,8 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
       appBar: AppBar(
         title: Text(widget.album.album),
       ),
-      body: FutureBuilder<List<Song>>(
-        future: _albumSongsFuture,
+      body: FutureBuilder<List<SongModel>>(
+        future: _albumSongsFuture, // Corrected future
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -49,14 +50,14 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
             itemCount: songsInAlbum.length,
             itemBuilder: (context, index) {
               final song = songsInAlbum[index];
-              final isPlaying = musicProvider.currentSong?.id == song.id && musicProvider.isPlaying;
-              final isLoading = musicProvider.loadingSongId == song.id;
+              final isPlaying = musicProvider.currentSong?.id == song.id.toString() && musicProvider.isPlaying;
+              final isLoading = musicProvider.loadingSongId == song.id.toString();
 
               return ListTile(
-                leading: FutureBuilder<Artwork>(
+                leading: FutureBuilder<Uint8List?>(
                   future: musicProvider.getArtwork(song.id, ArtworkType.AUDIO),
                   builder: (context, artworkSnapshot) {
-                    if (artworkSnapshot.hasData) {
+                    if (artworkSnapshot.hasData && artworkSnapshot.data != null) {
                       return CircleAvatar(
                         backgroundImage: MemoryImage(artworkSnapshot.data!),
                       );
