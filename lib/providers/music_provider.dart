@@ -198,10 +198,11 @@ class MusicProvider with ChangeNotifier {
   /// Correctly fetches songs for a specific local album.
   Future<List<SongModel>> getLocalSongsByAlbum(int albumId) async {
     // This is the correct method to query songs from a specific album ID.
+    // The sortType parameter is removed as it's no longer valid and the
+    // default sort order is by track number.
     return await _audioQuery.queryAudiosFrom(
       AudiosFromType.ALBUM_ID,
       albumId,
-      sortType: SongSortType.TRACK, // Sort by track number
     );
   }
 
