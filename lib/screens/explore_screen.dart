@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:oxcy/models/search_models.dart';
-import 'package:oxcy/providers/music_data_provider.dart' hide Playlist, Chart;
+import 'package:oxcy/providers/music_data_provider.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:oxcy/screens/artist_details_screen.dart';
 import 'package:oxcy/screens/album_details_screen.dart';
 import 'package:oxcy/screens/playlist_details_screen.dart';
+import 'package:oxcy/screens/search_screen_delegate.dart';
 import 'package:transparent_image/transparent_image.dart';
 
 class ExploreScreen extends StatefulWidget {
@@ -16,114 +17,102 @@ class ExploreScreen extends StatefulWidget {
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
-  final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _performSearch(BuildContext context) {
-    final query = _searchController.text.trim();
-    Provider.of<MusicData>(context, listen: false).search(query);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            hintText: 'Search for music...',
-            border: InputBorder.none,
-            hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
-          ),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          onSubmitted: (_) => _performSearch(context),
-        ),
+        title: const Text('Explore Music', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () => _performSearch(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.clear),
             onPressed: () {
-              _searchController.clear();
-              Provider.of<MusicData>(context, listen: false).clearSearch();
+              // Use the custom SearchScreenDelegate to handle the search UI.
+              showSearch(context: context, delegate: SearchScreenDelegate());
             },
-          )
+          ),
         ],
       ),
       body: Consumer<MusicData>(
         builder: (context, musicData, child) {
+          // Show a loading indicator while fetching initial data.
           if (musicData.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
+          // Show an error message if something went wrong.
           if (musicData.errorMessage != null) {
             return Center(child: Text(musicData.errorMessage!));
           }
 
-          final isSearching = _searchController.text.isNotEmpty;
-
-          return isSearching
-              ? _buildSearchResults(musicData)
-              : _buildExploreContent(musicData);
+          // Build the main content of the explore screen.
+          return _buildExploreContent(musicData);
         },
       ),
     );
   }
 
+  // Builds the scrollable list of music sections.
   Widget _buildExploreContent(MusicData musicData) {
+    // Use a ListView to display the different modules fetched from the API.
     return ListView(
+      padding: const EdgeInsets.only(bottom: 120), // Add padding for the mini-player
       children: [
         if (musicData.modules.containsKey('trending_songs'))
           _buildSongSection('Trending Now', musicData.modules['trending_songs']! as List<Song>),
         if (musicData.modules.containsKey('trending_albums'))
-          _buildAlbumSection('Trending Albums', musicData.modules['trending_albums']! as List<Album>),
+          _buildHorizontalSection<Album>('Trending Albums', musicData.modules['trending_albums']! as List<Album>),
         if (musicData.modules.containsKey('playlists'))
-          _buildPlaylistSection('Playlists', musicData.modules['playlists']! as List<Playlist>),
+          _buildHorizontalSection<Playlist>('Playlists', musicData.modules['playlists']! as List<Playlist>),
         if (musicData.modules.containsKey('charts'))
-          _buildChartSection('Charts', musicData.modules['charts']! as List<Chart>),
-         if (musicData.modules.containsKey('albums'))
-          _buildAlbumSection('Albums', musicData.modules['albums']! as List<Album>),
-        const SizedBox(height: 120), // Padding
+          _buildHorizontalSection<Chart>('Charts', musicData.modules['charts']! as List<Chart>),
+        if (musicData.modules.containsKey('albums'))
+          _buildHorizontalSection<Album>('Top Albums', musicData.modules['albums']! as List<Album>),
+        if (musicData.modules.containsKey('artists'))
+         _buildHorizontalSection<Artist>('Top Artists', musicData.modules['artists']! as List<Artist>),
       ],
     );
   }
 
-  Widget _buildSearchResults(MusicData musicData) {
-    if (musicData.isSearching) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (musicData.searchResults.isEmpty) {
-      return const Center(child: Text('No results found.'));
-    }
-
-    return ListView.builder(
-      itemCount: musicData.searchResults.length,
-      itemBuilder: (context, index) {
-        final item = musicData.searchResults[index];
-        if (item is Song) {
-          return _buildSongItem(item);
-        }
-        if (item is Artist) {
-          return _buildArtistItem(item, isTopResult: true);
-        }
-        if (item is Album) {
-          return _buildAlbumItem(item);
-        }
-        if (item is Playlist) {
-          return _buildPlaylistItem(item);
-        }
-        return const SizedBox.shrink();
-      },
+  // Builds a vertically scrolling section for a list of songs.
+  Widget _buildSongSection(String title, List<Song> songs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(title),
+        // Map each song to a ListTile widget.
+        ...songs.map((song) => _buildSongItem(song)).toList(),
+      ],
     );
   }
 
+  // Generic builder for a horizontally scrolling section.
+  Widget _buildHorizontalSection<T extends SearchResult>(String title, List<T> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(title),
+        SizedBox(
+          height: 190,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              // Determine the widget type based on the model.
+              return Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: item is Artist 
+                    ? _buildArtistCard(artist: item)
+                    : _buildGenericCard(item: item),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Builds a standard section header.
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 8.0),
@@ -134,185 +123,75 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  Widget _buildSongSection(String title, List<Song> songs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(title),
-        ...songs.map((song) => _buildSongItem(song)).toList(),
-      ],
-    );
-  }
-
-  Widget _buildHorizontalSection<T>(
-      String title, List<T> items, Widget Function(T) itemBuilder) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(title),
-        SizedBox(
-          height: 180,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(left: 16.0),
-                child: itemBuilder(items[index]),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAlbumSection(String title, List<Album> albums) {
-    return _buildHorizontalSection<Album>(
-      title,
-      albums,
-      (album) => _buildGenericCard(
-        title: album.title,
-        subtitle: album.subtitle,
-        imageUrl: album.imageUrl,
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AlbumDetailsScreen(albumId: album.id),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPlaylistSection(String title, List<Playlist> playlists) {
-    return _buildHorizontalSection<Playlist>(
-      title,
-      playlists,
-      (playlist) => _buildGenericCard(
-        title: playlist.title,
-        subtitle: playlist.subtitle,
-        imageUrl: playlist.imageUrl,
-        onTap: () {
-           Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PlaylistDetailsScreen(playlistId: playlist.id),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildChartSection(String title, List<Chart> charts) {
-    return _buildHorizontalSection<Chart>(
-      title,
-      charts,
-      (chart) => _buildGenericCard(
-        title: chart.title,
-        imageUrl: chart.imageUrl,
-        onTap: () { /* TODO: Navigate to chart details */ },
-      ),
-    );
-  }
-
-   Widget _buildSongItem(Song song) {
+  // Builds a list tile for a single song.
+  Widget _buildSongItem(Song song) {
     return ListTile(
       leading: Card(
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
         clipBehavior: Clip.antiAlias,
         child: FadeInImage.memoryNetwork(
-          placeholder: kTransparentImage,
-          image: song.thumbUrl,
+          placeholder: kTransparentImage, // Shows a transparent placeholder.
+          image: song.highQualityImageUrl, // Use the new getter for the best image.
           width: 56, height: 56, fit: BoxFit.cover,
-          imageErrorBuilder: (c,e,s) => const Icon(Icons.music_note, size: 56),
+          imageErrorBuilder: (c, e, s) => const Icon(Icons.music_note, size: 56),
         ),
       ),
-      title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-      onTap: () => Provider.of<MusicProvider>(context, listen: false).play(song),
-    );
-  }
-
-   Widget _buildArtistItem(Artist artist, {bool isTopResult = false}) {
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 30,
-        backgroundImage: NetworkImage(artist.imageUrl),
-        backgroundColor: Colors.transparent,
-      ),
-      title: Text(artist.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: const Text('Artist'),
+      title: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(song.artistNames, maxLines: 1, overflow: TextOverflow.ellipsis),
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ArtistDetailsScreen(artistId: artist.id),
-          ),
-        );
+        // Play the selected song using the MusicProvider.
+        Provider.of<MusicProvider>(context, listen: false).play(song);
       },
     );
   }
 
-  Widget _buildAlbumItem(Album album) {
-    return ListTile(
-      leading: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-        clipBehavior: Clip.antiAlias,
-        child: FadeInImage.memoryNetwork(
-          placeholder: kTransparentImage,
-          image: album.imageUrl,
-          width: 56, height: 56, fit: BoxFit.cover,
-          imageErrorBuilder: (c,e,s) => const Icon(Icons.album, size: 56),
-        ),
-      ),
-      title: Text(album.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(album.subtitle ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AlbumDetailsScreen(albumId: album.id),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPlaylistItem(Playlist playlist) {
-    return ListTile(
-      leading: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-        clipBehavior: Clip.antiAlias,
-        child: FadeInImage.memoryNetwork(
-          placeholder: kTransparentImage,
-          image: playlist.imageUrl,
-          width: 56, height: 56, fit: BoxFit.cover,
-          imageErrorBuilder: (c,e,s) => const Icon(Icons.playlist_play, size: 56),
-        ),
-      ),
-      title: Text(playlist.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(playlist.subtitle ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-       onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => PlaylistDetailsScreen(playlistId: playlist.id),
-            ),
-          );
-        },
-    );
-  }
-
-  Widget _buildGenericCard({required String title, String? subtitle, required String imageUrl, required VoidCallback onTap}) {
+  // Builds a circular card for an artist.
+  Widget _buildArtistCard({required Artist artist}) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ArtistDetailsScreen(artistId: artist.id)),
+        );
+      },
+      child: SizedBox(
+        width: 140,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 60,
+              backgroundImage: NetworkImage(artist.highQualityImageUrl), // Use the new getter.
+            ),
+            const SizedBox(height: 8),
+            Text(
+              artist.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Builds a generic rectangular card for albums, playlists, and charts.
+  Widget _buildGenericCard({required SearchResult item}) {
+    String subtitle = '';
+    if (item is Album) subtitle = item.artistNames;
+
+    return GestureDetector(
+      onTap: () {
+        // Navigate to the correct details screen based on the item type.
+        if (item is Album) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => AlbumDetailsScreen(albumId: item.id)));
+        } else if (item is Playlist || item is Chart) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => PlaylistDetailsScreen(playlistId: item.id)));
+        }
+      },
       child: SizedBox(
         width: 140,
         child: Column(
@@ -324,14 +203,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
               clipBehavior: Clip.antiAlias,
               child: FadeInImage.memoryNetwork(
                 placeholder: kTransparentImage,
-                image: imageUrl,
+                image: item.highQualityImageUrl, // Use the new getter.
                 width: 140, height: 140, fit: BoxFit.cover,
-                imageErrorBuilder: (c,e,s) => Container(width: 140, height: 140, color: Colors.grey.shade800),
+                imageErrorBuilder: (c, e, s) => Container(width: 140, height: 140, color: Colors.grey.shade800),
               ),
             ),
             const SizedBox(height: 8),
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-            if (subtitle != null)
+            Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+            if (subtitle.isNotEmpty)
               Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white.withOpacity(0.7))),
           ],
         ),

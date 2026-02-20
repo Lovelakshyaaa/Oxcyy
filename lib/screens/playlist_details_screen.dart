@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/providers/music_data_provider.dart' hide Playlist;
+import 'package:oxcy/services/oxcy_api_service.dart';
 import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 
@@ -17,7 +15,6 @@ class PlaylistDetailsScreen extends StatefulWidget {
 }
 
 class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> {
-  final String _baseUrl = "https://music-three-woad.vercel.app";
   Future<Map<String, dynamic>>? _playlistDetailsFuture;
 
   @override
@@ -28,24 +25,32 @@ class _PlaylistDetailsScreenState extends State<PlaylistDetailsScreen> {
 
   Future<Map<String, dynamic>> _fetchPlaylistDetails() async {
     try {
-      // Corrected Endpoint: /playlist?id=...
-      final playlistResponse = await http.get(Uri.parse('$_baseUrl/playlist?id=${widget.playlistId}'));
+      final playlistData = await OxcyApiService.getPlaylistById(widget.playlistId);
 
-      if (playlistResponse.statusCode == 200) {
-        final musicData = Provider.of<MusicData>(context, listen: false);
-        final playlistData = json.decode(playlistResponse.body)['data'];
-
-        if (playlistData == null) {
-          throw Exception('No data found for this playlist.');
-        }
-
-        return {
-          'details': musicData.buildPlaylist(playlistData),
-          'songs': (playlistData['songs'] as List? ?? []).map((song) => musicData.buildSong(song)).whereType<Song>().toList(),
-        };
-      } else {
-        throw Exception('Failed to load playlist details');
+      if (playlistData == null) {
+        throw Exception('No data found for this playlist.');
       }
+
+      final songs = (playlistData['songs'] as List)
+          .map((songData) => Song(
+                id: songData['id'],
+                title: songData['name'],
+                artist: songData['primaryArtists'] is String ? songData['primaryArtists'] : (songData['primaryArtists'] as List).map((artist) => artist['name']).join(', '),
+                thumbUrl: (songData['image'] as List).last['link'],
+                duration: Duration(seconds: int.parse(songData['duration'])),
+                downloadUrl: (songData['downloadUrl'] as List).last['link'],
+              ))
+          .toList();
+
+      return {
+        'details': Playlist(
+          id: playlistData['id'],
+          title: playlistData['name'],
+          imageUrl: (playlistData['image'] as List).last['link'],
+          subtitle: playlistData['description'],
+        ),
+        'songs': songs,
+      };
     } catch (e) {
       print("Playlist details fetch error: $e");
       throw Exception('A network error occurred.');

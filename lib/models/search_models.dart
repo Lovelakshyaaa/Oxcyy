@@ -1,63 +1,177 @@
-class SearchResult {
-  final String id;
-  final String title;
-  final String? subtitle;
-  final String type;
-  final String imageUrl;
 
-  SearchResult({required this.id, required this.title, this.subtitle, required this.type, required this.imageUrl});
+// Defines the data models used throughout the application, with fromJson constructors
+// for robust parsing of the data from the JioSaavn API.
+
+// Represents a generic link with quality and URL, used for images and downloads.
+class Link {
+  final String quality;
+  final String url;
+
+  Link({required this.quality, required this.url});
+
+  factory Link.fromJson(Map<String, dynamic> json) {
+    return Link(
+      quality: json['quality'] as String? ?? 'low',
+      url: (json['url'] as String? ?? '').replaceAll('http:', 'https:'),
+    );
+  }
 }
 
-class Artist {
+// Base class for a searchable item (e.g., Song, Album).
+abstract class SearchResult {
   final String id;
   final String name;
-  final String imageUrl;
+  final String type;
+  final List<Link> image;
 
-  Artist({required this.id, required this.name, required this.imageUrl});
+  SearchResult({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.image,
+  });
+
+  String get highQualityImageUrl =>
+      image.firstWhere((l) => l.quality == '500x500', orElse: () => image.last).url;
 }
 
-class Album {
-  final String id;
-  final String title;
-  final String imageUrl;
-  final String? subtitle;
+// Represents an Artist entity from the API.
+class Artist extends SearchResult {
+  Artist({
+    required String id,
+    required String name,
+    required String type,
+    required List<Link> image,
+  }) : super(id: id, name: name, type: type, image: image);
 
-  Album({required this.id, required this.title, required this.imageUrl, this.subtitle});
+  factory Artist.fromJson(Map<String, dynamic> json) {
+    return Artist(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? json['title'] as String? ?? 'Unknown Artist',
+      type: json['type'] as String? ?? 'artist',
+      image: (json['image'] as List<dynamic>? ?? [])
+          .map((i) => Link.fromJson(i as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }
 
-class Playlist {
-  final String id;
-  final String title;
-  final String imageUrl;
-  final String? subtitle;
+// Represents an Album entity from the API.
+class Album extends SearchResult {
+  final List<Artist> artists;
 
-  Playlist({required this.id, required this.title, required this.imageUrl, this.subtitle});
+  Album({
+    required String id,
+    required String name,
+    required String type,
+    required List<Link> image,
+    required this.artists,
+  }) : super(id: id, name: name, type: type, image: image);
+
+  factory Album.fromJson(Map<String, dynamic> json) {
+    var artistsData = (json['artists']?['primary'] as List<dynamic>?) ?? 
+                      (json['artists'] as List<dynamic>?) ?? 
+                      [];
+                      
+    return Album(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? json['title'] as String? ?? 'Unknown Album',
+      type: json['type'] as String? ?? 'album',
+      image: (json['image'] as List<dynamic>? ?? [])
+          .map((i) => Link.fromJson(i as Map<String, dynamic>))
+          .toList(),
+      artists: artistsData
+          .map((a) => Artist.fromJson(a as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  String get artistNames => artists.map((a) => a.name).join(', ');
 }
 
-class Chart {
-  final String id;
-  final String title;
-  final String imageUrl;
+// Represents a Playlist entity from the API.
+class Playlist extends SearchResult {
+  Playlist({
+    required String id,
+    required String name,
+    required String type,
+    required List<Link> image,
+  }) : super(id: id, name: name, type: type, image: image);
 
-  Chart({required this.id, required this.title, required this.imageUrl});
+  factory Playlist.fromJson(Map<String, dynamic> json) {
+    return Playlist(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? json['title'] as String? ?? 'Unknown Playlist',
+      type: json['type'] as String? ?? 'playlist',
+      image: (json['image'] as List<dynamic>? ?? [])
+          .map((i) => Link.fromJson(i as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }
 
-class Song {
-  final String id; // The unique ID of the song from the API
-  final String title;
-  final String artist;
-  final String thumbUrl;
-  final String? type;
-  final Duration? duration;
-  String? downloadUrl; // Made optional
+// Represents a Chart entity from the API.
+class Chart extends SearchResult {
+  Chart({
+    required String id,
+    required String name,
+    required String type,
+    required List<Link> image,
+  }) : super(id: id, name: name, type: type, image: image);
+
+  factory Chart.fromJson(Map<String, dynamic> json) {
+    return Chart(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? json['title'] as String? ?? 'Unknown Chart',
+      type: json['type'] as String? ?? 'chart',
+      image: (json['image'] as List<dynamic>? ?? [])
+          .map((i) => Link.fromJson(i as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+// Represents a Song entity, including download and artist details.
+class Song extends SearchResult {
+  final int? duration;
+  final List<Artist> artists;
+  final List<Link> downloadUrl;
 
   Song({
-    required this.id,
-    required this.title,
-    required this.artist,
-    required this.thumbUrl,
-    this.type,
+    required String id,
+    required String name,
+    required String type,
+    required List<Link> image,
     this.duration,
-    this.downloadUrl, // Optional parameter
-  });
+    required this.artists,
+    required this.downloadUrl,
+  }) : super(id: id, name: name, type: type, image: image);
+
+  factory Song.fromJson(Map<String, dynamic> json) {
+    var artistsData = (json['artists']?['primary'] as List<dynamic>?) ?? 
+                      (json['primaryArtists'] as List<dynamic>?) ??
+                      [];
+                      
+    return Song(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? 'Unknown Song',
+      type: json['type'] as String? ?? 'song',
+      image: (json['image'] as List<dynamic>? ?? [])
+          .map((i) => Link.fromJson(i as Map<String, dynamic>))
+          .toList(),
+      duration: int.tryParse(json['duration']?.toString() ?? '0'),
+      artists: artistsData
+          .map((a) => a is Map<String, dynamic> ? Artist.fromJson(a) : Artist(id: '', name: a.toString(), type: 'artist', image: []))
+          .toList(),
+      downloadUrl: (json['downloadUrl'] as List<dynamic>? ?? [])
+          .map((u) => Link.fromJson(u as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  String get artistNames => artists.map((a) => a.name).join(', ');
+  String? get highQualityStreamUrl {
+      final hq = downloadUrl.firstWhere((l) => l.quality == '320kbps', orElse: () => downloadUrl.last);
+      return hq.url;
+  }
 }

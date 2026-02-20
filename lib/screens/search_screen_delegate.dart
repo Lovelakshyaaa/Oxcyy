@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_data_provider.dart';
+import 'package:oxcy/providers/music_provider.dart';
+import 'package:oxcy/screens/album_details_screen.dart';
+import 'package:oxcy/screens/artist_details_screen.dart';
+import 'package:oxcy/screens/playlist_details_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:transparent_image/transparent_image.dart';
 
-class SearchScreenDelegate extends SearchDelegate {
+// Integrates with Flutter's SearchDelegate to provide a rich search experience.
+class SearchScreenDelegate extends SearchDelegate<SearchResult> {
+  // Defines the theme for the search app bar.
   @override
   ThemeData appBarTheme(BuildContext context) {
-    return Theme.of(context).copyWith(
-      scaffoldBackgroundColor: const Color(0xFF0F0C29),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF1D1B3E),
+    final theme = Theme.of(context);
+    return theme.copyWith(
+      scaffoldBackgroundColor: theme.scaffoldBackgroundColor,
+      appBarTheme: AppBarTheme(
+        backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
       ),
-      textTheme: const TextTheme(
-        titleLarge: TextStyle(color: Colors.white, fontSize: 18), // Corrected: headline6 -> titleLarge
+      textTheme: theme.textTheme.copyWith(
+        titleLarge: TextStyle(color: theme.primaryColorLight, fontSize: 18),
       ),
     );
   }
 
+  // Defines the actions for the app bar (e.g., a 'clear' button).
   @override
   List<Widget>? buildActions(BuildContext context) {
     return [
@@ -25,26 +34,29 @@ class SearchScreenDelegate extends SearchDelegate {
         icon: const Icon(Icons.clear),
         onPressed: () {
           query = '';
+          // Also clear the results in the provider when the query is cleared.
+          Provider.of<MusicData>(context, listen: false).clearSearch();
         },
       ),
     ];
   }
 
+  // Defines the leading icon/button in the app bar (e.g., a 'back' button).
   @override
   Widget? buildLeading(BuildContext context) {
     return IconButton(
       icon: const Icon(Icons.arrow_back),
-      onPressed: () {
-        close(context, null);
-      },
+      onPressed: () => close(context, {} as SearchResult),
     );
   }
 
+  // This method is called when the user submits a search query.
   @override
   Widget buildResults(BuildContext context) {
-    final musicData = Provider.of<MusicData>(context, listen: false);
-    musicData.search(query);
+    // Trigger the search in the MusicDataProvider.
+    Provider.of<MusicData>(context, listen: false).search(query);
 
+    // Use a Consumer to listen for changes in the MusicData provider.
     return Consumer<MusicData>(
       builder: (context, data, child) {
         if (data.isSearching) {
@@ -53,69 +65,136 @@ class SearchScreenDelegate extends SearchDelegate {
         if (data.errorMessage != null) {
           return Center(child: Text(data.errorMessage!));
         }
-        return _buildSearchResults(data.searchResults);
+        // Build the list of search results.
+        return _buildSearchResults(context, data.searchResults);
       },
     );
   }
 
+  // This method provides suggestions as the user types.
   @override
   Widget buildSuggestions(BuildContext context) {
+    // Suggestions are not implemented; the user must submit the search.
     return Container(
-      color: const Color(0xFF0F0C29),
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: const Center(
-        child: Text('Search for songs, artists, albums...'),
+        child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+                Icon(Icons.music_note, size: 48),
+                SizedBox(height: 16),
+                Text('Search for songs, artists, and albums...'),
+            ],
+        ),
       ),
     );
   }
 
-  Widget _buildSearchResults(List<dynamic> results) {
+  // Builds the final list of search results.
+  Widget _buildSearchResults(BuildContext context, List<SearchResult> results) {
+    if (results.isEmpty) {
+      return const Center(child: Text('No results found.'));
+    }
+
     return Container(
-      color: const Color(0xFF0F0C29),
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: ListView.builder(
         itemCount: results.length,
         itemBuilder: (context, index) {
           final item = results[index];
+          // Determine the type of the search result and build the appropriate ListTile.
           if (item is Song) {
-            return ListTile(
-              leading: Image.network(item.thumbUrl, width: 50, height: 50),
-              title: Text(item.title),
-              subtitle: Text(item.artist),
-              onTap: () {
-                // Handle song tap
-              },
-            );
+            return _buildSongItem(context, item);
           } else if (item is Artist) {
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundImage: NetworkImage(item.imageUrl),
-              ),
-              title: Text(item.name),
-              onTap: () {
-                // Handle artist tap
-              },
-            );
+            return _buildArtistItem(context, item);
           } else if (item is Album) {
-            return ListTile(
-              leading: Image.network(item.imageUrl, width: 50, height: 50),
-              title: Text(item.title),
-              subtitle: Text(item.subtitle ?? ''), // Corrected: Handle nullable subtitle
-              onTap: () {
-                // Handle album tap
-              },
-            );
+            return _buildAlbumItem(context, item);
           } else if (item is Playlist) {
-            return ListTile(
-              leading: Image.network(item.imageUrl, width: 50, height: 50),
-              title: Text(item.title),
-              subtitle: Text(item.subtitle ?? ''), // Corrected: Handle nullable subtitle
-              onTap: () {
-                // Handle playlist tap
-              },
-            );
+            return _buildPlaylistItem(context, item);
           }
-          return const SizedBox.shrink();
+          return const SizedBox.shrink(); // Return an empty widget for unknown types.
         },
       ),
+    );
+  }
+
+  // --- WIDGET BUILDERS FOR DIFFERENT SEARCH RESULT TYPES ---
+
+  Widget _buildSongItem(BuildContext context, Song song) {
+    return ListTile(
+      leading: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        clipBehavior: Clip.antiAlias,
+        child: FadeInImage.memoryNetwork(
+          placeholder: kTransparentImage,
+          image: song.highQualityImageUrl,
+          width: 50, height: 50, fit: BoxFit.cover,
+        ),
+      ),
+      title: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(song.artistNames, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: () => Provider.of<MusicProvider>(context, listen: false).play(song),
+    );
+  }
+
+  Widget _buildArtistItem(BuildContext context, Artist artist) {
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: NetworkImage(artist.highQualityImageUrl),
+      ),
+      title: Text(artist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ArtistDetailsScreen(artistId: artist.id)),
+        );
+      },
+    );
+  }
+
+  Widget _buildAlbumItem(BuildContext context, Album album) {
+    return ListTile(
+      leading: Card(
+         elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        clipBehavior: Clip.antiAlias,
+        child: FadeInImage.memoryNetwork(
+          placeholder: kTransparentImage,
+          image: album.highQualityImageUrl,
+          width: 50, height: 50, fit: BoxFit.cover,
+        ),
+      ),
+      title: Text(album.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(album.artistNames, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => AlbumDetailsScreen(albumId: album.id)),
+        );
+      },
+    );
+  }
+
+  Widget _buildPlaylistItem(BuildContext context, Playlist playlist) {
+    return ListTile(
+      leading: Card(
+         elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
+        clipBehavior: Clip.antiAlias,
+        child: FadeInImage.memoryNetwork(
+          placeholder: kTransparentImage,
+          image: playlist.highQualityImageUrl,
+          width: 50, height: 50, fit: BoxFit.cover,
+        ),
+      ),
+      title: Text(playlist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => PlaylistDetailsScreen(playlistId: playlist.id)),
+        );
+      },
     );
   }
 }

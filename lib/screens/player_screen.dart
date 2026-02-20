@@ -1,190 +1,226 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/models/search_models.dart';
-import 'dart:typed_data';
-import 'package:on_audio_query/on_audio_query.dart';
-import 'package:just_audio/just_audio.dart'; // <--- ADDED IMPORT
 
+import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:oxcy/models/search_models.dart';
+import 'package:oxcy/providers/music_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:transparent_image/transparent_image.dart';
+
+// The main, full-screen player UI.
 class PlayerScreen extends StatelessWidget {
-  const PlayerScreen({Key? key}) : super(key: key);
+  const PlayerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
     return Consumer<MusicProvider>(
       builder: (context, musicProvider, child) {
-        final song = musicProvider.currentSong;
-        if (song == null) {
-          return const SizedBox.shrink();
-        }
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          height: size.height,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.deepPurple.shade800,
-                Colors.deepPurple.shade900,
-              ],
+        // The AnimatedPositioned slides the entire screen up from the bottom.
+        // Its visibility is controlled by the isPlayerVisible flag in the provider.
+        return AnimatedPositioned(
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOutCubic,
+          // If no song is loaded, hide the player off-screen.
+          bottom: musicProvider.currentSong != null && musicProvider.isPlayerVisible ? 0 : -size.height,
+          left: 0,
+          right: 0,
+          child: SizedBox(
+            height: size.height,
+            // The AnimatedSwitcher will handle the transition between the mini-player and the full player.
+            // However, this version only shows the full player, so it is not strictly necessary here but is kept for future enhancements.
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              child: _buildExpandedPlayer(context, musicProvider, musicProvider.currentSong!),
             ),
-          ),
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            appBar: AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              leading: musicProvider.isPlayerExpanded ? IconButton(
-                icon: const Icon(Icons.expand_more),
-                onPressed: () => musicProvider.collapsePlayer(),
-              ) : null,
-              title: musicProvider.isPlayerExpanded ? Text(song.title) : null,
-              centerTitle: true,
-            ),
-            body: _buildPlayerBody(context, musicProvider, song),
           ),
         );
       },
     );
   }
 
-  Widget _buildPlayerBody(BuildContext context, MusicProvider musicProvider, Song song) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 500),
-      child: musicProvider.isPlayerExpanded
-          ? _buildExpandedPlayer(context, musicProvider, song)
-          : _buildCollapsedPlayer(context, musicProvider, song),
-    );
-  }
-
-  Widget _buildCollapsedPlayer(BuildContext context, MusicProvider musicProvider, Song song) {
+  // Builds the main expanded player UI.
+  Widget _buildExpandedPlayer(BuildContext context, MusicProvider musicProvider, Song song) {
     return GestureDetector(
-      onTap: () => musicProvider.togglePlayerView(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        color: Colors.black.withOpacity(0.3),
-        child: Row(
-          children: [
-            _buildArtwork(song, isExpanded: false),
-            const SizedBox(width: 10),
-            Expanded(child: Text(song.title, overflow: TextOverflow.ellipsis)),
-            IconButton(icon: const Icon(Icons.skip_previous), onPressed: () {}), // Add logic
-            IconButton(
-              icon: Icon(musicProvider.isPlaying ? Icons.pause : Icons.play_arrow),
-              onPressed: () => musicProvider.isPlaying ? musicProvider.pause() : musicProvider.resume(),
+      // Allow the user to swipe down to hide the player.
+      onVerticalDragEnd: (details) {
+        if (details.primaryVelocity! > 200) {
+          musicProvider.hidePlayer();
+        }
+      },
+      child: ClipRRect(
+        child: BackdropFilter(
+          // Apply a heavy blur to the background for a frosted-glass effect.
+          filter: ImageFilter.blur(sigmaX: 50.0, sigmaY: 50.0),
+          child: Container(
+            decoration: BoxDecoration(
+              // A subtle gradient provides a premium feel.
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.deepPurple.shade700.withOpacity(0.8),
+                  const Color(0xFF0F0C29).withOpacity(0.9),
+                ],
+              ),
             ),
-            IconButton(icon: const Icon(Icons.skip_next), onPressed: () {}), // Add logic
-          ],
+            child: Scaffold(
+              backgroundColor: Colors.transparent,
+              appBar: AppBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.expand_more, color: Colors.white),
+                  onPressed: () => musicProvider.hidePlayer(),
+                ),
+                title: const Text('Now Playing', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                centerTitle: true,
+              ),
+              body: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                // Animate the content entrance for a more engaging experience.
+                child: AnimationLimiter(
+                  child: Column(
+                    children: AnimationConfiguration.toStaggeredList(
+                      duration: const Duration(milliseconds: 375),
+                      childAnimationBuilder: (widget) => SlideAnimation(
+                        verticalOffset: 50.0,
+                        child: FadeInAnimation(child: widget),
+                      ),
+                      children: [
+                        const Spacer(),
+                        _buildArtwork(song, isExpanded: true),
+                        const SizedBox(height: 40),
+                        Text(song.name, // Use name from the Song model.
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        Text(song.artistNames, // Use the new artistNames getter.
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
+                            textAlign: TextAlign.center),
+                        const Spacer(flex: 2),
+                        _buildProgressBar(context, musicProvider),
+                        _buildControls(context, musicProvider),
+                        const Spacer(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildExpandedPlayer(BuildContext context, MusicProvider musicProvider, Song song) {
+  // Builds the album artwork.
+  Widget _buildArtwork(Song song, {required bool isExpanded}) {
+    final size = isExpanded ? 280.0 : 50.0;
+    return Card(
+      elevation: 12,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(isExpanded ? 20 : 8)),
+      clipBehavior: Clip.antiAlias,
+      child: FadeInImage.memoryNetwork(
+        placeholder: kTransparentImage, // Use a transparent placeholder.
+        image: song.highQualityImageUrl, // Use the high-quality image URL.
+        height: size,
+        width: size,
+        fit: BoxFit.cover,
+        imageErrorBuilder: (ctx, err, stack) => _placeholder(size),
+      ),
+    );
+  }
+
+  Widget _placeholder(double size) => Container(
+      height: size, width: size, color: Colors.grey.shade800, child: const Icon(Icons.music_note, color: Colors.white));
+
+  // Builds the interactive progress bar.
+  Widget _buildProgressBar(BuildContext context, MusicProvider musicProvider) {
+    return StreamBuilder<Duration>(
+      stream: musicProvider.positionStream,
+      builder: (context, snapshot) {
+        final position = snapshot.data ?? Duration.zero;
+        final duration = musicProvider.duration;
+        return Column(
+          children: [
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8.0),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16.0),
+              ),
+              child: Slider(
+                value: position.inMilliseconds.toDouble().clamp(0.0, duration.inMilliseconds.toDouble()),
+                min: 0.0,
+                max: duration.inMilliseconds.toDouble(),
+                onChanged: (value) {
+                  musicProvider.seek(Duration(milliseconds: value.toInt()));
+                },
+                activeColor: Colors.white,
+                inactiveColor: Colors.white.withOpacity(0.3),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(_formatDuration(position), style: const TextStyle(color: Colors.white70)),
+                  Text(_formatDuration(duration), style: const TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Builds the playback control buttons.
+  Widget _buildControls(BuildContext context, MusicProvider musicProvider) {
     return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.symmetric(vertical: 20.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          const Spacer(),
-          _buildArtwork(song, isExpanded: true),
-          const SizedBox(height: 40),
-          Text(song.title, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
-          const SizedBox(height: 10),
-          Text(song.artist, style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
-          const Spacer(),
-          _buildProgressBar(context, musicProvider),
-          _buildControls(context, musicProvider),
-          const Spacer(),
+          IconButton(
+              icon: Icon(Icons.shuffle, color: musicProvider.isShuffleEnabled ? Colors.deepPurple.shade300 : Colors.white70),
+              onPressed: () => musicProvider.toggleShuffle()),
+          IconButton(
+              icon: const Icon(Icons.skip_previous, size: 36, color: Colors.white),
+              onPressed: () => musicProvider.playPrevious()),
+          // The main play/pause button.
+          IconButton(
+            icon: Icon(musicProvider.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                size: 70, color: Colors.white),
+            onPressed: () => musicProvider.isPlaying ? musicProvider.pause() : musicProvider.resume(),
+          ),
+          IconButton(
+              icon: const Icon(Icons.skip_next, size: 36, color: Colors.white),
+              onPressed: () => musicProvider.playNext()),
+          IconButton(
+              icon: Icon(_repeatIcon(musicProvider.repeatMode),
+                  color: musicProvider.repeatMode != LoopMode.off ? Colors.deepPurple.shade300 : Colors.white70),
+              onPressed: () => musicProvider.cycleRepeatMode()),
         ],
       ),
     );
   }
 
-  Widget _buildArtwork(Song song, {required bool isExpanded}) {
-    final size = isExpanded ? 250.0 : 50.0;
-    return ClipRRect(
-        borderRadius: BorderRadius.circular(isExpanded ? 16.0 : 8.0),
-        child: song.thumbUrl.isNotEmpty
-        ? Image.network(
-            song.thumbUrl,
-            height: size,
-            width: size,
-            fit: BoxFit.cover,
-            errorBuilder: (ctx, err, stack) => _placeholder(size),
-          )
-        : FutureBuilder<Uint8List?>(
-            future: Provider.of<MusicProvider>(_scaffoldKey.currentContext!, listen: false).getArtwork(int.parse(song.id), ArtworkType.AUDIO),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.done && snapshot.data != null) {
-                return Image.memory(snapshot.data!, height: size, width: size, fit: BoxFit.cover);
-              } else {
-                return _placeholder(size);
-              }
-            },
-          )
-    );
-  }
-
-  Widget _placeholder(double size) => Container(height: size, width: size, color: Colors.grey.shade800, child: const Icon(Icons.music_note, color: Colors.white, size: 50));
-
-
-  Widget _buildProgressBar(BuildContext context, MusicProvider musicProvider) {
-    return Column(
-      children: [
-        Slider(
-          value: musicProvider.position.inSeconds.toDouble(),
-          min: 0.0,
-          max: musicProvider.duration.inSeconds.toDouble() + 1.0,
-          onChanged: (value) {
-            musicProvider.seek(Duration(seconds: value.toInt()));
-          },
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 25.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_formatDuration(musicProvider.position)),
-              Text(_formatDuration(musicProvider.duration)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildControls(BuildContext context, MusicProvider musicProvider) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        IconButton(icon: Icon(Icons.shuffle, color: musicProvider.isShuffleEnabled ? Theme.of(context).colorScheme.primary : Colors.white), onPressed: () => musicProvider.toggleShuffle()),
-        IconButton(icon: const Icon(Icons.skip_previous, size: 36), onPressed: () {}), // Add logic
-        IconButton(
-          icon: Icon(musicProvider.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, size: 70),
-          onPressed: () => musicProvider.isPlaying ? musicProvider.pause() : musicProvider.resume(),
-        ),
-        IconButton(icon: const Icon(Icons.skip_next, size: 36), onPressed: () {}), // Add logic
-        IconButton(icon: Icon(_repeatIcon(musicProvider.repeatMode), color: musicProvider.repeatMode != LoopMode.off ? Theme.of(context).colorScheme.primary : Colors.white), onPressed: () => musicProvider.cycleRepeatMode()),
-      ],
-    );
-  }
-
+  // Helper to determine the correct repeat icon.
   IconData _repeatIcon(LoopMode loopMode) {
     if (loopMode == LoopMode.one) return Icons.repeat_one;
-    if (loopMode == LoopMode.all) return Icons.repeat;
     return Icons.repeat;
   }
 
+  // Helper to format duration into a readable string (MM:SS).
   String _formatDuration(Duration d) {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return "$minutes:$seconds";
   }
 }
-
-final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/providers/music_data_provider.dart' hide Album;
+import 'package:oxcy/screens/album_details_screen.dart';
+import 'package:oxcy/services/oxcy_api_service.dart';
 import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 
@@ -17,7 +16,6 @@ class ArtistDetailsScreen extends StatefulWidget {
 }
 
 class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
-  final String _baseUrl = "https://music-three-woad.vercel.app";
   Future<Map<String, dynamic>>? _artistDetailsFuture;
 
   @override
@@ -28,24 +26,41 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
 
   Future<Map<String, dynamic>> _fetchArtistDetails() async {
     try {
-      final artistResponse = await http.get(Uri.parse('$_baseUrl/artist?id=${widget.artistId}'));
-      final songsResponse = await http.get(Uri.parse('$_baseUrl/artist/songs?id=${widget.artistId}'));
-      final albumsResponse = await http.get(Uri.parse('$_baseUrl/artist/albums?id=${widget.artistId}'));
+      final artistData = await OxcyApiService.getArtistById(widget.artistId);
 
-      if (artistResponse.statusCode == 200 && songsResponse.statusCode == 200 && albumsResponse.statusCode == 200) {
-        final musicData = Provider.of<MusicData>(context, listen: false);
-        final artistData = json.decode(artistResponse.body)['data'];
-        final songsData = json.decode(songsResponse.body)['data']['results'];
-        final albumsData = json.decode(albumsResponse.body)['data']['results'];
-
-        return {
-          'details': musicData.buildArtist(artistData),
-          'songs': (songsData as List).map((song) => musicData.buildSong(song)).whereType<Song>().toList(),
-          'albums': (albumsData as List).map((album) => musicData.buildAlbum(album)).whereType<Album>().toList(),
-        };
-      } else {
-        throw Exception('Failed to load artist details');
+      if (artistData == null) {
+        throw Exception('No data found for this artist.');
       }
+
+      final songs = (artistData['topSongs'] as List)
+          .map((songData) => Song(
+                id: songData['id'],
+                title: songData['name'],
+                artist: songData['primaryArtists'] is String ? songData['primaryArtists'] : (songData['primaryArtists'] as List).map((artist) => artist['name']).join(', '),
+                thumbUrl: (songData['image'] as List).last['link'],
+                duration: Duration(seconds: int.parse(songData['duration'])),
+                downloadUrl: (songData['downloadUrl'] as List).last['link'],
+              ))
+          .toList();
+
+      final albums = (artistData['topAlbums'] as List)
+          .map((albumData) => Album(
+                id: albumData['id'],
+                title: albumData['name'],
+                imageUrl: (albumData['image'] as List).last['link'],
+                subtitle: albumData['year'],
+              ))
+          .toList();
+
+      return {
+        'details': Artist(
+          id: artistData['artistId'],
+          name: artistData['name'],
+          imageUrl: (artistData['image'] as List).last['link'],
+        ),
+        'songs': songs,
+        'albums': albums,
+      };
     } catch (e) {
       print("Artist details fetch error: $e");
       throw Exception('A network error occurred.');
@@ -138,7 +153,14 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
               title: album.title,
               subtitle: album.subtitle,
               imageUrl: album.imageUrl,
-              onTap: () { /* TODO: Navigate to album details */ },
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AlbumDetailsScreen(albumId: album.id),
+                  ),
+                );
+              },
             ),
           );
         },

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:oxcy/models/search_models.dart';
 import 'package:oxcy/providers/music_provider.dart';
-import 'package:oxcy/providers/music_data_provider.dart' hide Album;
+import 'package:oxcy/services/oxcy_api_service.dart';
 import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 
@@ -17,7 +15,6 @@ class AlbumDetailsScreen extends StatefulWidget {
 }
 
 class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
-  final String _baseUrl = "https://music-three-woad.vercel.app";
   Future<Map<String, dynamic>>? _albumDetailsFuture;
 
   @override
@@ -28,24 +25,32 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
 
   Future<Map<String, dynamic>> _fetchAlbumDetails() async {
     try {
-      // Corrected Endpoint: /album?id=...
-      final albumResponse = await http.get(Uri.parse('$_baseUrl/album?id=${widget.albumId}'));
+      final albumData = await OxcyApiService.getAlbumById(widget.albumId);
 
-      if (albumResponse.statusCode == 200) {
-        final musicData = Provider.of<MusicData>(context, listen: false);
-        final albumData = json.decode(albumResponse.body)['data'];
-
-        if (albumData == null) {
-          throw Exception('No data found for this album.');
-        }
-
-        return {
-          'details': musicData.buildAlbum(albumData),
-          'songs': (albumData['songs'] as List).map((song) => musicData.buildSong(song)).whereType<Song>().toList(),
-        };
-      } else {
-        throw Exception('Failed to load album details');
+      if (albumData == null) {
+        throw Exception('No data found for this album.');
       }
+
+      final songs = (albumData['songs'] as List)
+          .map((songData) => Song(
+                id: songData['id'],
+                title: songData['name'],
+                artist: songData['primaryArtists'] is String ? songData['primaryArtists'] : (songData['primaryArtists'] as List).map((artist) => artist['name']).join(', '),
+                thumbUrl: (songData['image'] as List).last['link'],
+                duration: Duration(seconds: int.parse(songData['duration'])),
+                downloadUrl: (songData['downloadUrl"] as List).last['link'],
+              ))
+          .toList();
+
+      return {
+        'details': Album(
+          id: albumData['id'],
+          title: albumData['name'],
+          imageUrl: (albumData['image'] as List).last['link'],
+          subtitle: albumData['primaryArtists'] is String ? albumData['primaryArtists'] : (albumData['primaryArtists'] as List).map((artist) => artist['name']).join(', '),
+        ),
+        'songs': songs,
+      };
     } catch (e) {
       print("Album details fetch error: $e");
       throw Exception('A network error occurred.');

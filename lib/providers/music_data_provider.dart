@@ -1,195 +1,154 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:oxcy/models/search_models.dart';
+import 'package:oxcy/services/oxcy_api_service.dart';
 
+// Manages the application's music data, state, and interactions with the API.
 class MusicData with ChangeNotifier {
-  final String _baseUrl = "https://music-three-woad.vercel.app";
-
-  bool _isLoading = true;
+  // --- STATE PROPERTIES ---
+  bool _isLoading = true; // For initial launch data loading.
   bool get isLoading => _isLoading;
+
+  bool _isSearching = false; // For search-specific loading states.
+  bool get isSearching => _isSearching;
 
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  Map<String, List<dynamic>> _modules = {};
-  Map<String, List<dynamic>> get modules => _modules;
+  // Holds the data for the main "explore" screen, categorized by module.
+  Map<String, List<SearchResult>> _modules = {};
+  Map<String, List<SearchResult>> get modules => _modules;
 
-  bool _isSearching = false;
-  bool get isSearching => _isSearching;
-  List<dynamic> _searchResults = [];
-  List<dynamic> get searchResults => _searchResults;
+  // Holds the results of a user's search.
+  List<SearchResult> _searchResults = [];
+  List<SearchResult> get searchResults => _searchResults;
 
+  // --- INITIALIZATION ---
   MusicData() {
+    // Fetch the initial data required to populate the UI when the app starts.
     fetchLaunchData();
   }
 
-  // --- SAFE PARSING HELPERS ---
-  String _getId(Map<String, dynamic> item) => item['id']?.toString() ?? item['songid']?.toString() ?? '';
-  String _getTitle(Map<String, dynamic> item) => item['name']?.toString() ?? item['title']?.toString() ?? 'Unknown';
+  // --- DATA FETCHING METHODS ---
 
-  String _getSubtitle(Map<String, dynamic> item) {
-    final subtitle = item['subtitle']?.toString();
-    if (subtitle != null && subtitle.isNotEmpty) return subtitle;
-    final artist = _getArtistName(item);
-    if (artist.isNotEmpty && artist != 'Unknown Artist') return artist;
-    final year = item['year']?.toString();
-    if (year != null && year.isNotEmpty) return year;
-    return item['type']?.toString() ?? '';
-  }
-
-  String _getArtistName(Map<String, dynamic> item) {
-    dynamic artists = item['primaryArtists'] ?? item['artists'];
-    if (artists is String && artists.isNotEmpty) return artists;
-    if (artists is List && artists.isNotEmpty) {
-      return artists.map((a) => a['name']?.toString() ?? '').where((s) => s.isNotEmpty).join(', ');
-    }
-    return item['subtitle']?.toString() ?? 'Unknown Artist';
-  }
-
-  Duration? _getDuration(dynamic duration) {
-    if (duration is String) {
-      final seconds = int.tryParse(duration);
-      return seconds != null ? Duration(seconds: seconds) : null;
-    }
-    if (duration is num) return Duration(seconds: duration.toInt());
-    return null;
-  }
-
-  String _getImageUrl(dynamic imageField) {
-    if (imageField is String && imageField.isNotEmpty) return imageField;
-    if (imageField is List && imageField.isNotEmpty) {
-      final lastImage = imageField.last;
-      if (lastImage is Map && lastImage['link'] != null) {
-        return lastImage['link'];
-      }
-    }
-    return 'https://via.placeholder.com/150'; // Return a placeholder
-  }
-
-  String? _getDownloadUrl(dynamic urlField) {
-    if (urlField is List && urlField.isNotEmpty) {
-      final lastUrl = urlField.last;
-      if (lastUrl is Map && lastUrl['link'] != null) {
-        return lastUrl['link'];
-      }
-    }
-    if (urlField is String && urlField.isNotEmpty) return urlField;
-    return null;
-  }
-
-  // --- END HELPERS ---
-
+  /// Fetches the initial data for the home screen from the `/modules` endpoint.
   Future<void> fetchLaunchData() async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+    _setLoading(true);
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/modules?lang=english'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body)['data'];
-        _modules.clear();
+      final response = await OxcyApiService.getHomeData();
+      if (response != null && response['data'] != null) {
+        final data = response['data'];
+        _modules.clear(); // Clear previous data.
 
-        _modules['trending_songs'] = (data['trending']?['data'] as List? ?? []).map((item) => buildSong(item)).whereType<Song>().toList();
-        _modules['playlists'] = (data['playlists']?['data'] as List? ?? []).map((item) => buildPlaylist(item)).whereType<Playlist>().toList();
-        _modules['charts'] = (data['charts']?['data'] as List? ?? []).map((item) => buildChart(item)).whereType<Chart>().toList();
-        _modules['albums'] = (data['albums']?['data'] as List? ?? []).map((item) => buildAlbum(item)).whereType<Album>().toList();
+        // Safely parse and build each module from the API response.
+        _modules['albums'] = _buildList(data['albums'], Album.fromJson);
+        _modules['charts'] = _buildList(data['charts'], Chart.fromJson);
+        _modules['playlists'] = _buildList(data['playlists'], Playlist.fromJson);
+        
+        // Trending data is nested, so handle it separately.
+        if (data['trending'] != null) {
+            _modules['trending_songs'] = _buildList(data['trending']['songs'], Song.fromJson);
+            _modules['trending_albums'] = _buildList(data['trending']['albums'], Album.fromJson);
+        }
 
       } else {
-        _errorMessage = "Failed to load essential app data.";
+        _setError('Failed to load essential app data.');
       }
     } catch (e) {
-      _errorMessage = "A network error occurred. Check your connection.";
+      _setError('A network error occurred. Please check your connection.');
+      print("fetchLaunchData Error: $e");
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      _setLoading(false);
     }
   }
 
+  /// Searches for all types of content (songs, albums, artists, playlists).
   Future<void> search(String query) async {
-    if (query.isEmpty) {
-      _searchResults.clear();
-      notifyListeners();
+    if (query.trim().isEmpty) {
+      clearSearch();
       return;
     }
-    _isSearching = true;
-    _errorMessage = null;
-    notifyListeners();
+    _setSearching(true);
     try {
-      final response = await http.get(Uri.parse('$_baseUrl/search/all?query=${Uri.encodeComponent(query)}'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body)['data'];
+      final response = await OxcyApiService.searchAll(query);
+      if (response != null) {
         _searchResults.clear();
-        List<dynamic> results = [];
-        if (data['songs'] != null) results.addAll(data['songs']['results']);
-        if (data['albums'] != null) results.addAll(data['albums']['results']);
-        if (data['artists'] != null) results.addAll(data['artists']['results']);
-        if (data['playlists'] != null) results.addAll(data['playlists']['results']);
 
-        _searchResults = results.map((item) => _parseSearchResultItem(item)).where((item) => item != null).toList();
+        // The /search/all endpoint returns a map of result categories.
+        response.forEach((category, results) {
+          if (results is Map && results.containsKey('results')) {
+            final items = results['results'] as List<dynamic>? ?? [];
+            for (var item in items) {
+               final result = _parseItem(item as Map<String, dynamic>);
+               if (result != null) {
+                 _searchResults.add(result);
+               }
+            }
+          }
+        });
+
       } else {
-        _errorMessage = "Search failed.";
+        _setError('Search failed. No results found.');
       }
     } catch (e) {
-      _errorMessage = "A network error occurred during search.";
+      _setError('A network error occurred during the search.');
+       print("Search Error: $e");
     } finally {
-      _isSearching = false;
-      notifyListeners();
+      _setSearching(false);
     }
+  }
+
+  /// Clears the current search results and notifies listeners.
+  void clearSearch() {
+    _searchResults.clear();
+    notifyListeners();
   }
   
-  void clearSearch() {
-      _searchResults.clear();
-      notifyListeners();
-  }
+  // --- UTILITY & HELPER METHODS ---
 
-  dynamic _parseSearchResultItem(Map<String, dynamic> item) {
-    final type = item['type']?.toString() ?? '';
+  /// Generic helper to build a list of objects from a JSON list using a factory.
+  List<T> _buildList<T>(dynamic data, T Function(Map<String, dynamic>) fromJson) {
+    if (data == null || data is! List) return [];
+    return data
+        .map((item) => fromJson(item as Map<String, dynamic>))
+        .where((item) => (item as SearchResult).id.isNotEmpty) // Filter out invalid items
+        .toList();
+  }
+  
+  /// Parses a single JSON item into the correct SearchResult model based on its type.
+  SearchResult? _parseItem(Map<String, dynamic> item) {
+    final type = item['type']?.toString().toLowerCase();
     switch (type) {
-      case 'song': return buildSong(item);
-      case 'artist': return buildArtist(item);
-      case 'album': return buildAlbum(item);
-      case 'playlist': return buildPlaylist(item);
-      default: return null;
+      case 'song':
+        return Song.fromJson(item);
+      case 'album':
+        return Album.fromJson(item);
+      case 'artist':
+        return Artist.fromJson(item);
+      case 'playlist':
+        return Playlist.fromJson(item);
+      default:
+        return null; // Ignore unknown types.
     }
   }
 
-  Song? buildSong(Map<String, dynamic> item) {
-    final id = _getId(item);
-    if (id.isEmpty) return null;
-    return Song(
-      id: id,
-      title: _getTitle(item),
-      artist: _getArtistName(item),
-      thumbUrl: _getImageUrl(item['image']),
-      type: item['type']?.toString() ?? 'song',
-      duration: _getDuration(item['duration']),
-      downloadUrl: _getDownloadUrl(item['downloadUrl']),
-    );
+  /// Helper to set the main loading state and notify listeners.
+  void _setLoading(bool isLoading) {
+    _isLoading = isLoading;
+    _errorMessage = null;
+    notifyListeners();
   }
 
-  Artist? buildArtist(Map<String, dynamic> item) {
-    final id = _getId(item);
-    if (id.isEmpty) return null;
-    return Artist(id: id, name: _getTitle(item), imageUrl: _getImageUrl(item['image']));
+  /// Helper to set the search loading state and notify listeners.
+  void _setSearching(bool isSearching) {
+    _isSearching = isSearching;
+    _errorMessage = null;
+    notifyListeners();
   }
 
-  Album? buildAlbum(Map<String, dynamic> item) {
-    final id = _getId(item);
-    if (id.isEmpty) return null;
-    return Album(id: id, title: _getTitle(item), imageUrl: _getImageUrl(item['image']), subtitle: _getSubtitle(item));
-  }
-
-  Playlist? buildPlaylist(Map<String, dynamic> item) {
-    final id = _getId(item);
-    if (id.isEmpty) return null;
-    return Playlist(id: id, title: _getTitle(item), imageUrl: _getImageUrl(item['image']), subtitle: _getSubtitle(item));
-  }
-
-  Chart? buildChart(Map<String, dynamic> item) {
-    final id = _getId(item);
-    if (id.isEmpty) return null;
-    return Chart(id: id, title: _getTitle(item), imageUrl: _getImageUrl(item['image']));
+  /// Helper to set an error message and notify listeners.
+  void _setError(String message) {
+    _errorMessage = message;
+    notifyListeners();
   }
 }
