@@ -6,13 +6,34 @@ import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:oxcy/models/search_models.dart';
 
+// Helper to convert MediaItem to a consistent Song object
+Song _songFromMediaItem(MediaItem mediaItem) {
+  if (mediaItem.extras != null && mediaItem.extras!['song'] is Map<String, dynamic>) {
+    try {
+      return Song.fromJson(mediaItem.extras!['song']);
+    } catch (e) {
+      // Fallback for safety
+    }
+  }
+
+  // Fallback: construct from MediaItem properties if 'song' extra is missing or malformed
+  return Song(
+    id: mediaItem.id,
+    name: mediaItem.title,
+    type: 'song',
+    image: mediaItem.artUri != null ? [Link(quality: '500x500', url: mediaItem.artUri.toString())] : [],
+    artists: mediaItem.artist != null ? [Artist(id: '', name: mediaItem.artist!, type: 'artist', image: [])] : [],
+    duration: mediaItem.duration?.inSeconds,
+    downloadUrl: mediaItem.extras?['url'] != null ? [Link(quality: '320kbps', url: mediaItem.extras!['url'])] : [],
+  );
+}
+
+
 class MusicProvider with ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
   final AudioHandler _audioHandler;
 
   Song? _currentSong;
-  List<Song> _queue = [];
-  int _currentIndex = -1;
 
   bool _isPlayerVisible = false;
   String? _errorMessage;
@@ -27,17 +48,25 @@ class MusicProvider with ChangeNotifier {
   String? get loadingSongId => _loadingSongId;
   bool get isFetchingLocal => _isFetchingLocal;
   List<AlbumModel> get localAlbums => _localAlbums;
+  
+  // Expose the playback state stream for widgets that need to react to multiple state changes
+  Stream<PlaybackState> get playbackState => _audioHandler.playbackState;
+  
+  // Provide a simple getter for the current playing state
+  bool get isPlaying => _audioHandler.playbackState.value.playing;
+
 
   MusicProvider(this._audioHandler) {
     _listenToPlaybackState();
   }
 
   void _listenToPlaybackState() {
+    // Listen for changes in the playback state (playing, paused, buffering, etc.)
     _audioHandler.playbackState.listen((playbackState) {
-      final isPlaying = playbackState.playing;
       final processingState = playbackState.processingState;
       if (processingState == AudioProcessingState.loading ||
           processingState == AudioProcessingState.buffering) {
+        // Set loading indicator for the specific song
         _loadingSongId = _audioHandler.mediaItem.value?.id;
       } else {
         _loadingSongId = null;
@@ -45,77 +74,90 @@ class MusicProvider with ChangeNotifier {
       notifyListeners();
     });
 
+    // Listen for changes in the currently playing media item
     _audioHandler.mediaItem.listen((mediaItem) {
       if (mediaItem != null) {
-        _currentSong = Song.fromJson(mediaItem.extras!['song']);
-        _isPlayerVisible = true;
+        _currentSong = _songFromMediaItem(mediaItem);
       }
       notifyListeners();
     });
   }
 
+  /// Sets the audio handler's queue and starts playing from a specific index.
+  /// This is the primary method for starting playback of a list of songs (album, playlist, etc.).
   Future<void> setPlaylist(List<dynamic> songs, {int initialIndex = 0}) async {
+    if (songs.isEmpty) return;
+
     final mediaItems = songs.map((song) {
-      return MediaItem(
-        id: song.id.toString(),
-        title: song.name,
-        artist: song.artistNames,
-        artUri: Uri.parse(song.highQualityImageUrl),
-        extras: {
-          'url': song.highQualityStreamUrl,
-          'song': song.toJson(),
-        },
-      );
-    }).toList();
+      if (song is Song) { // Online song
+        return MediaItem(
+          id: song.id.toString(),
+          title: song.name,
+          artist: song.artistNames,
+          artUri: Uri.parse(song.highQualityImageUrl),
+          duration: Duration(seconds: song.duration ?? 0),
+          extras: {
+            'url': song.highQualityStreamUrl,
+            'song': song.toJson(),
+          },
+        );
+      } else if (song is SongModel) { // Local song
+        return MediaItem(
+          id: song.id.toString(),
+          title: song.title,
+          artist: song.artist ?? 'Unknown Artist',
+          duration: Duration(milliseconds: song.duration ?? 0),
+          extras: {
+            'url': song.uri, // This is the local file path
+            // Create a consistent 'song' map for local files as well
+            'song': {
+              'id': song.id.toString(),
+              'name': song.title,
+              'type': 'song',
+              'image': [],
+              'duration': (song.duration ?? 0) ~/ 1000, // to seconds
+              'artists': [{'id': '', 'name': song.artist ?? 'Unknown Artist', 'type': 'artist', 'image': []}],
+              'downloadUrl': [{'quality': 'local', 'url': song.uri}],
+            },
+          },
+        );
+      }
+      return null;
+    }).whereType<MediaItem>().toList();
 
-    await _audioHandler.updateQueue(mediaItems);
-    await _audioHandler.skipToQueueItem(initialIndex);
-    await _audioHandler.play();
-  }
-
-  Future<void> play(dynamic song) async {
-    if (song is Song) {
-      final mediaItem = MediaItem(
-        id: song.id.toString(),
-        title: song.name,
-        artist: song.artistNames,
-        artUri: Uri.parse(song.highQualityImageUrl),
-        extras: {
-          'url': song.highQualityStreamUrl,
-          'song': song.toJson(),
-        },
-      );
-      await _audioHandler.updateQueue([mediaItem]);
+    if (mediaItems.isNotEmpty) {
+      await _audioHandler.updateQueue(mediaItems);
+      await _audioHandler.skipToQueueItem(initialIndex);
       await _audioHandler.play();
-    } else if (song is SongModel) {
-      final mediaItem = MediaItem(
-        id: song.id.toString(),
-        title: song.title,
-        artist: song.artist,
-        extras: {
-          'url': song.uri,
-          'song': song.getMap,
-        },
-      );
-      await _audioHandler.updateQueue([mediaItem]);
-      await _audioHandler.play();
+      showPlayer(); // Make the full player visible when a new playlist starts
     }
   }
 
+  /// A convenience method to play a single song.
+  Future<void> play(dynamic song) async {
+    await setPlaylist([song]);
+  }
+
+  // --- Playback Controls ---
   void resume() => _audioHandler.play();
   void pause() => _audioHandler.pause();
   void seek(Duration position) => _audioHandler.seek(position);
   Future<void> playNext() => _audioHandler.skipToNext();
   Future<void> playPrevious() => _audioHandler.skipToPrevious();
 
+  // --- UI Control ---
   void showPlayer() {
-    _isPlayerVisible = true;
-    notifyListeners();
+    if (!_isPlayerVisible) {
+      _isPlayerVisible = true;
+      notifyListeners();
+    }
   }
 
   void hidePlayer() {
-    _isPlayerVisible = false;
-    notifyListeners();
+    if (_isPlayerVisible) {
+      _isPlayerVisible = false;
+      notifyListeners();
+    }
   }
 
   void _setError(String message) {
@@ -124,25 +166,46 @@ class MusicProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // --- Local Music Fetching ---
   Future<void> fetchLocalMusic() async {
     _isFetchingLocal = true;
     notifyListeners();
-
     try {
-      _localAlbums = await _audioQuery.queryAlbums();
+      // Ensure we have permissions before querying
+      if (await _audioQuery.permissionsStatus()) {
+        _localAlbums = await _audioQuery.queryAlbums(
+          sortType: AlbumSortType.ALBUM,
+          orderType: OrderType.ASC_OR_SMALLER,
+          ignoreCase: true,
+        );
+      } else {
+        await _audioQuery.permissionsRequest();
+        // Retry fetching if permissions are granted
+        if (await _audioQuery.permissionsStatus()) {
+          _localAlbums = await _audioQuery.queryAlbums();
+        } else {
+           _setError("Storage permission not granted.");
+        }
+      }
     } catch (e) {
-      _setError("Failed to fetch local music.");
+      _setError("Failed to fetch local albums: $e");
     } finally {
       _isFetchingLocal = false;
       notifyListeners();
     }
   }
 
-  Future<List<SongModel>> getLocalSongsByAlbum(int albumId) {
-    return _audioQuery.querySongs(sortType: SongSortType.TITLE);
+  /// Correctly fetches songs for a specific local album.
+  Future<List<SongModel>> getLocalSongsByAlbum(int albumId) async {
+    // This is the correct method to query songs from a specific album ID.
+    return await _audioQuery.queryAudiosFrom(
+      AudiosFromType.ALBUM_ID,
+      albumId,
+      sortType: SongSortType.TRACK, // Sort by track number
+    );
   }
 
   Future<Uint8List?> getArtwork(int id, ArtworkType type) {
-    return _audioQuery.queryArtwork(id, type);
+    return _audioQuery.queryArtwork(id, type, size: 200); // specify size for better performance
   }
 }

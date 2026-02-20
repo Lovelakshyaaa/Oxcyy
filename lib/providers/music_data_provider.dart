@@ -26,7 +26,7 @@ class MusicData with ChangeNotifier {
   // --- INITIALIZATION ---
   MusicData() {
     // Fetch the initial data required to populate the UI when the app starts.
-    fetchLaunchData();
+    fetchInitialData();
   }
 
   // --- DATA FETCHING METHODS ---
@@ -60,6 +60,10 @@ class MusicData with ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+  
+  Future<void> fetchInitialData() async {
+    await fetchLaunchData();
   }
 
   /// Searches for all types of content (songs, albums, artists, playlists).

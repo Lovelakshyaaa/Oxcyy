@@ -12,9 +12,13 @@ class Link {
   factory Link.fromJson(Map<String, dynamic> json) {
     return Link(
       quality: json['quality'] as String? ?? 'low',
-      url: (json['url'] as String? ?? '').replaceAll('http:', 'https:'),
+      url: (json['url'] as String? ?? '').replaceAll('http:', 'https'),
     );
   }
+  Map<String, dynamic> toJson() => {
+        'quality': quality,
+        'url': url,
+      };
 }
 
 // Base class for a searchable item (e.g., Song, Album).
@@ -54,6 +58,12 @@ class Artist extends SearchResult {
           .toList(),
     );
   }
+    Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'type': type,
+        'image': image.map((e) => e.toJson()).toList(),
+      };
 }
 
 // Represents an Album entity from the API.
@@ -168,6 +178,17 @@ class Song extends SearchResult {
           .toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'type': type,
+        'image': image.map((e) => e.toJson()).toList(),
+        'duration': duration,
+        'artists': artists.map((e) => e.toJson()).toList(),
+        'downloadUrl': downloadUrl.map((e) => e.toJson()).toList(),
+      };
+
 
   String get artistNames => artists.map((a) => a.name).join(', ');
   String? get highQualityStreamUrl {
