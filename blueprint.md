@@ -17,11 +17,10 @@ Oxcy is a music streaming application that allows users to search for and play m
 
 The app uses a dark theme with a color palette based on deep purple and dark blue. The UI is designed to be modern and intuitive, with a focus on visual appeal and ease of use.
 
-## Current Task: Refactor and Fix Code
+## Current Task: Fix `just_audio` Breaking Changes
 
-In this session, I have refactored the code to fix breaking changes introduced by a previous developer. The main changes include:
+In this session, I have resolved breaking changes caused by an update to the `just_audio` package. The key changes include:
 
-- Restoring deleted code in `lib/models/search_models.dart`.
-- Updating `lib/providers/music_data_provider.dart` to use `Song.fromJson` instead of a custom parsing logic.
-- Restoring missing properties and methods in `lib/providers/music_provider.dart`.
-- Fixing errors in `lib/screens/album_details_screen.dart`, `lib/screens/album_songs_screen.dart`, `lib/screens/artist_details_screen.dart`, `lib/screens/explore_screen.dart`, `lib/screens/player_screen.dart`, `lib/screens/playlist_details_screen.dart`, and `lib/screens/search_screen_delegate.dart` caused by the refactoring.
+- **Removed `just_audio_background`**: Removed the deprecated `just_audio_background` package and its initialization in `lib/main.dart`.
+- **Updated `music_provider.dart`**: Replaced the `MediaItem` class with `AudioSource` from the `just_audio` package and updated the `getLocalSongsByAlbum` method.
+- **Fixed `artist_details_screen.dart`**: Removed a reference to the non-existent `year` property in the `Album` model.

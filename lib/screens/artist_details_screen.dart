@@ -135,7 +135,6 @@ class _ArtistDetailsScreenState extends State<ArtistDetailsScreen> {
             padding: const EdgeInsets.only(left: 16.0),
             child: _buildGenericCard(
               title: album.name,
-              subtitle: album.year,
               imageUrl: album.highQualityImageUrl,
               onTap: () {
                 Navigator.push(

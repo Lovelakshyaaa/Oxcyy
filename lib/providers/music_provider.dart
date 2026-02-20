@@ -3,7 +3,6 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:oxcy/models/search_models.dart';
 
@@ -78,11 +77,11 @@ class MusicProvider with ChangeNotifier {
         final audioSources = queue.map((track) {
           return AudioSource.uri(
             Uri.parse(track.uri!),
-            tag: MediaItem(
-              id: track.id.toString(),
-              title: track.title,
-              artist: track.artist,
-            ),
+            tag: {
+              'id': track.id.toString(),
+              'title': track.title,
+              'artist': track.artist,
+            },
           );
         }).toList();
         final playlistSource = ConcatenatingAudioSource(children: audioSources);
@@ -95,12 +94,12 @@ class MusicProvider with ChangeNotifier {
 
           return AudioSource.uri(
             Uri.parse(streamUrl),
-            tag: MediaItem(
-              id: track.id,
-              title: track.name,
-              artist: track.artistNames,
-              artUri: Uri.parse(track.highQualityImageUrl),
-            ),
+            tag: {
+              'id': track.id,
+              'title': track.name,
+              'artist': track.artistNames,
+              'artUri': track.highQualityImageUrl,
+            },
           );
         }).whereType<AudioSource>().toList();
 
@@ -180,7 +179,7 @@ class MusicProvider with ChangeNotifier {
   }
 
   Future<List<SongModel>> getLocalSongsByAlbum(int albumId) {
-    return _audioQuery.querySongs(albumId: albumId, sortType: SongSortType.TITLE);
+    return _audioQuery.querySongs( sortType: SongSortType.TITLE);
   }
 
   Future<Uint8List?> getArtwork(int id, ArtworkType type) {

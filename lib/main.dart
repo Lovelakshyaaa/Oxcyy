@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import 'package:oxcy/screens/local_music_screen.dart';
 import 'package:oxcy/widgets/mini_player.dart';
 import 'package:provider/provider.dart';
@@ -10,11 +9,6 @@ import 'package:oxcy/screens/player_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
-    androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: true,
-  );
   runApp(const MyApp());
 }
 
