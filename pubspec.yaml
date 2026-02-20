@@ -32,7 +32,7 @@ dependencies:
   provider: ^6.1.5+1
 
   # 🎵 AUDIO ENGINES
-  just_audio: ^0.10.5 # For local files
+  just_audio: ^0.10.5
   audio_service: ^0.18.18
   audio_session: ^0.2.2
   on_audio_query: ^2.9.0

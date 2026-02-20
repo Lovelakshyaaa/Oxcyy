@@ -57,30 +57,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 120), // Add padding for the mini-player
       children: [
-        if (musicData.modules.containsKey('trending_songs'))
-          _buildSongSection('Trending Now', musicData.modules['trending_songs']! as List<Song>),
-        if (musicData.modules.containsKey('trending_albums'))
-          _buildHorizontalSection<Album>('Trending Albums', musicData.modules['trending_albums']! as List<Album>),
-        if (musicData.modules.containsKey('playlists'))
-          _buildHorizontalSection<Playlist>('Playlists', musicData.modules['playlists']! as List<Playlist>),
-        if (musicData.modules.containsKey('charts'))
-          _buildHorizontalSection<Chart>('Charts', musicData.modules['charts']! as List<Chart>),
         if (musicData.modules.containsKey('albums'))
           _buildHorizontalSection<Album>('Top Albums', musicData.modules['albums']! as List<Album>),
         if (musicData.modules.containsKey('artists'))
          _buildHorizontalSection<Artist>('Top Artists', musicData.modules['artists']! as List<Artist>),
-      ],
-    );
-  }
-
-  // Builds a vertically scrolling section for a list of songs.
-  Widget _buildSongSection(String title, List<Song> songs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(title),
-        // Map each song to a ListTile widget.
-        ...songs.map((song) => _buildSongItem(song)).toList(),
       ],
     );
   }

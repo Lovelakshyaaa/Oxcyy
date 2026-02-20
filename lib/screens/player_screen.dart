@@ -32,7 +32,9 @@ class PlayerScreen extends StatelessWidget {
             // However, this version only shows the full player, so it is not strictly necessary here but is kept for future enhancements.
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
-              child: _buildExpandedPlayer(context, musicProvider, musicProvider.currentSong!),
+              child: musicProvider.currentSong != null
+                  ? _buildExpandedPlayer(context, musicProvider, musicProvider.currentSong!)
+                  : const SizedBox.shrink(), // Show an empty box if there's no song
             ),
           ),
         );

@@ -1,13 +1,16 @@
 
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:oxcy/models/search_models.dart';
 
 // Manages the audio player, playback state, queue, and background notifications.
 class MusicProvider with ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final OnAudioQuery _audioQuery = OnAudioQuery();
 
   // --- State Properties ---
   Song? _currentSong;
@@ -18,6 +21,9 @@ class MusicProvider with ChangeNotifier {
   String? _errorMessage;
   String? _loadingSongId; // ID of the song currently being prepared.
 
+  bool _isFetchingLocal = false;
+  List<AlbumModel> _localAlbums = [];
+
   // --- Getters for UI ---
   Song? get currentSong => _currentSong;
   bool get isPlaying => _audioPlayer.playing;
@@ -27,6 +33,8 @@ class MusicProvider with ChangeNotifier {
   String? get loadingSongId => _loadingSongId;
   LoopMode get repeatMode => _audioPlayer.loopMode;
   bool get isShuffleEnabled => _audioPlayer.shuffleModeEnabled;
+  bool get isFetchingLocal => _isFetchingLocal;
+  List<AlbumModel> get localAlbums => _localAlbums;
 
   // --- Streams for real-time UI updates ---
   Stream<Duration> get positionStream => _audioPlayer.positionStream;
@@ -56,46 +64,57 @@ class MusicProvider with ChangeNotifier {
   }
 
   /// The core function to start playback of a song.
-  Future<void> play(Song song, {List<Song>? newQueue}) async {
-    _loadingSongId = song.id;
+  Future<void> play(dynamic song, {List<dynamic>? newQueue}) async {
+    _loadingSongId = song.id.toString();
     _isPlayerVisible = true; // Show the player UI.
     notifyListeners();
 
     try {
-      // Use the provided queue or create a new one with just the selected song.
-      _queue = newQueue ?? [song];
-      int initialIndex = _queue.indexWhere((s) => s.id == song.id);
+      List<dynamic> queue = newQueue ?? [song];
+      int initialIndex = queue.indexWhere((s) => s.id == song.id);
       if (initialIndex == -1) initialIndex = 0;
 
-      // Create a list of AudioSource objects for the just_audio player.
-      final audioSources = _queue.map((track) {
-        // The highQualityStreamUrl getter from our model is now used here.
-        final streamUrl = track.highQualityStreamUrl;
-        if (streamUrl == null) return null;
+      if (song is SongModel) {
+        final audioSources = queue.map((track) {
+          return AudioSource.uri(
+            Uri.parse(track.uri!),
+            tag: MediaItem(
+              id: track.id.toString(),
+              title: track.title,
+              artist: track.artist,
+            ),
+          );
+        }).toList();
+        final playlistSource = ConcatenatingAudioSource(children: audioSources);
+        await _audioPlayer.setAudioSource(playlistSource, initialIndex: initialIndex, initialPosition: Duration.zero);
+      } else {
+        _queue = queue.cast<Song>();
+        final audioSources = _queue.map((track) {
+          final streamUrl = track.highQualityStreamUrl;
+          if (streamUrl == null) return null;
 
-        return AudioSource.uri(
-          Uri.parse(streamUrl),
-          // The MediaItem tag is crucial for background audio notifications.
-          tag: MediaItem(
-            id: track.id,
-            title: track.name,
-            artist: track.artistNames, // Use the new artistNames getter.
-            artUri: Uri.parse(track.highQualityImageUrl), // Use the high-quality image URL.
-          ),
-        );
-      }).whereType<AudioSource>().toList(); // Filter out any nulls.
+          return AudioSource.uri(
+            Uri.parse(streamUrl),
+            tag: MediaItem(
+              id: track.id,
+              title: track.name,
+              artist: track.artistNames,
+              artUri: Uri.parse(track.highQualityImageUrl),
+            ),
+          );
+        }).whereType<AudioSource>().toList();
 
-      if (audioSources.isEmpty) {
-        _setError("Could not prepare any song for playback. The stream URL might be missing.");
-        return;
+        if (audioSources.isEmpty) {
+          _setError("Could not prepare any song for playback. The stream URL might be missing.");
+          return;
+        }
+
+        _currentSong = _queue[initialIndex];
+        _currentIndex = initialIndex;
+
+        final playlistSource = ConcatenatingAudioSource(children: audioSources);
+        await _audioPlayer.setAudioSource(playlistSource, initialIndex: initialIndex, initialPosition: Duration.zero);
       }
-
-      _currentSong = _queue[initialIndex];
-      _currentIndex = initialIndex;
-
-      // Set up the player with the playlist.
-      final playlistSource = ConcatenatingAudioSource(children: audioSources);
-      await _audioPlayer.setAudioSource(playlistSource, initialIndex: initialIndex, initialPosition: Duration.zero);
       _audioPlayer.play();
 
     } catch (e) {
@@ -144,6 +163,28 @@ class MusicProvider with ChangeNotifier {
     _errorMessage = message;
     _loadingSongId = null;
     notifyListeners();
+  }
+
+  Future<void> fetchLocalMusic() async {
+    _isFetchingLocal = true;
+    notifyListeners();
+
+    try {
+      _localAlbums = await _audioQuery.queryAlbums();
+    } catch (e) {
+      _setError("Failed to fetch local music.");
+    } finally {
+      _isFetchingLocal = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<SongModel>> getLocalSongsByAlbum(int albumId) {
+    return _audioQuery.querySongs(albumId: albumId, sortType: SongSortType.TITLE);
+  }
+
+  Future<Uint8List?> getArtwork(int id, ArtworkType type) {
+    return _audioQuery.queryArtwork(id, type);
   }
 
   @override

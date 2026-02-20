@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:transparent_image/transparent_image.dart';
 
 // Integrates with Flutter's SearchDelegate to provide a rich search experience.
-class SearchScreenDelegate extends SearchDelegate<SearchResult> {
+class SearchScreenDelegate extends SearchDelegate<SearchResult?> {
   // Defines the theme for the search app bar.
   @override
   ThemeData appBarTheme(BuildContext context) {
@@ -46,7 +46,7 @@ class SearchScreenDelegate extends SearchDelegate<SearchResult> {
   Widget? buildLeading(BuildContext context) {
     return IconButton(
       icon: const Icon(Icons.arrow_back),
-      onPressed: () => close(context, {} as SearchResult),
+      onPressed: () => close(context, null),
     );
   }
 

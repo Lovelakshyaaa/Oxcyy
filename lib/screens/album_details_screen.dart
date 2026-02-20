@@ -32,23 +32,11 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
       }
 
       final songs = (albumData['songs'] as List)
-          .map((songData) => Song(
-                id: songData['id'],
-                title: songData['name'],
-                artist: songData['primaryArtists'] is String ? songData['primaryArtists'] : (songData['primaryArtists'] as List).map((artist) => artist['name']).join(', '),
-                thumbUrl: (songData['image'] as List).last['link'],
-                duration: Duration(seconds: int.parse(songData['duration'])),
-                downloadUrl: (songData['downloadUrl"] as List).last['link'],
-              ))
+          .map((songData) => Song.fromJson(songData))
           .toList();
 
       return {
-        'details': Album(
-          id: albumData['id'],
-          title: albumData['name'],
-          imageUrl: (albumData['image'] as List).last['link'],
-          subtitle: albumData['primaryArtists'] is String ? albumData['primaryArtists'] : (albumData['primaryArtists'] as List).map((artist) => artist['name']).join(', '),
-        ),
+        'details': Album.fromJson(albumData),
         'songs': songs,
       };
     } catch (e) {
@@ -85,10 +73,10 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
                 backgroundColor: Colors.transparent,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: Text(details.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  title: Text(details.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                   background: FadeInImage.memoryNetwork(
                     placeholder: kTransparentImage,
-                    image: details.imageUrl,
+                    image: details.highQualityImageUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
                     imageErrorBuilder: (c, e, s) => Container(color: Colors.grey[800]),
@@ -124,15 +112,15 @@ class _AlbumDetailsScreenState extends State<AlbumDetailsScreen> {
         clipBehavior: Clip.antiAlias,
         child: FadeInImage.memoryNetwork(
           placeholder: kTransparentImage,
-          image: song.thumbUrl,
+          image: song.highQualityImageUrl,
           width: 56,
           height: 56,
           fit: BoxFit.cover,
           imageErrorBuilder: (c, e, s) => const Icon(Icons.music_note, size: 56),
         ),
       ),
-      title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(song.artistNames, maxLines: 1, overflow: TextOverflow.ellipsis),
       onTap: () => Provider.of<MusicProvider>(context, listen: false).play(song),
     );
   }

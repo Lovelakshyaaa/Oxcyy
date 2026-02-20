@@ -9,6 +9,7 @@ import 'package:oxcy/screens/explore_screen.dart';
 import 'package:oxcy/screens/player_screen.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
     androidNotificationChannelName: 'Audio playback',
@@ -93,7 +94,7 @@ class _MainScreenState extends State<MainScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const MiniPlayer(),
-              if (!provider.isPlayerExpanded)
+              if (!provider.isPlayerVisible)
               BottomNavigationBar(
                 backgroundColor: const Color(0xFF1A1A3D),
                 currentIndex: _currentIndex,
