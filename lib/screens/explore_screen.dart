@@ -17,6 +17,15 @@ class ExploreScreen extends StatefulWidget {
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
+    @override
+  void initState() {
+    super.initState();
+    // Fetch initial data when the screen is first loaded.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<MusicData>(context, listen: false).fetchInitialData();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -42,6 +51,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
           // Show an error message if something went wrong.
           if (musicData.errorMessage != null) {
             return Center(child: Text(musicData.errorMessage!));
+          }
+
+          // If there are no modules, show a message.
+          if (musicData.modules.isEmpty) {
+            return const Center(child: Text('No music content available.'));
           }
 
           // Build the main content of the explore screen.

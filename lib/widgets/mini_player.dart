@@ -1,3 +1,4 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ class MiniPlayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final musicProvider = context.watch<MusicProvider>();
+    final audioHandler = context.watch<AudioHandler>();
     final song = musicProvider.currentSong;
 
     // The mini player should not be visible if no song is loaded or if the full player is visible.
@@ -22,9 +24,9 @@ class MiniPlayer extends StatelessWidget {
       onTap: () => musicProvider.showPlayer(),
       // A swipe up gesture should also expand the player.
       onVerticalDragUpdate: (details) {
-          if (details.delta.dy < -10) { // Detect a swipe up
-              musicProvider.showPlayer();
-          }
+        if (details.delta.dy < -10) { // Detect a swipe up
+          musicProvider.showPlayer();
+        }
       },
       child: Container(
         height: 75,
@@ -65,20 +67,26 @@ class MiniPlayer extends StatelessWidget {
                 ),
               ),
               // Play/Pause button.
-              IconButton(
-                icon: Icon(
-                  musicProvider.isPlaying
-                      ? Icons.pause_circle_filled
-                      : Icons.play_circle_filled,
-                  size: 36,
-                  color: Colors.white,
-                ),
-                onPressed: () {
-                  if (musicProvider.isPlaying) {
-                    musicProvider.pause();
-                  } else {
-                    musicProvider.resume();
-                  }
+              StreamBuilder<PlaybackState>(
+                stream: audioHandler.playbackState,
+                builder: (context, snapshot) {
+                  final isPlaying = snapshot.data?.playing ?? false;
+                  return IconButton(
+                    icon: Icon(
+                      isPlaying
+                          ? Icons.pause_circle_filled
+                          : Icons.play_circle_filled,
+                      size: 36,
+                      color: Colors.white,
+                    ),
+                    onPressed: () {
+                      if (isPlaying) {
+                        audioHandler.pause();
+                      } else {
+                        audioHandler.play();
+                      }
+                    },
+                  );
                 },
               ),
               const SizedBox(width: 8),
