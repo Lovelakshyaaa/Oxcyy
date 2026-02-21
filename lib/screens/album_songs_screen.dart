@@ -4,6 +4,7 @@ import 'package:oxcy/models/search_models.dart';
 import 'package:provider/provider.dart';
 import 'package:oxcy/providers/music_provider.dart';
 import 'dart:typed_data';
+import 'package:audio_service/audio_service.dart';
 
 class AlbumSongsScreen extends StatefulWidget {
   final AlbumModel album; // Corrected Type: Use AlbumModel from on_audio_query
