@@ -52,55 +52,60 @@ class _AlbumSongsScreenState extends State<AlbumSongsScreen> {
             builder: (context, playbackSnapshot) {
               final playbackState = playbackSnapshot.data;
               final isPlaying = playbackState?.playing ?? false;
-              final currentMediaId = playbackState?.currentMediaItem?.id;
+              return StreamBuilder<MediaItem?>(
+                stream: musicProvider.mediaItem,
+                builder: (context, mediaItemSnapshot) {
+                  final currentMediaId = mediaItemSnapshot.data?.id;
 
-              return ListView.builder(
-                itemCount: songsInAlbum.length,
-                itemBuilder: (context, index) {
-                  final song = songsInAlbum[index];
-                  final isThisSongPlaying = isPlaying && currentMediaId == song.id.toString();
-                  final isLoading = musicProvider.loadingSongId == song.id.toString();
+                  return ListView.builder(
+                    itemCount: songsInAlbum.length,
+                    itemBuilder: (context, index) {
+                      final song = songsInAlbum[index];
+                      final isThisSongPlaying = isPlaying && currentMediaId == song.id.toString();
+                      final isLoading = musicProvider.loadingSongId == song.id.toString();
 
-                  return ListTile(
-                    leading: FutureBuilder<Uint8List?>(
-                      future: musicProvider.getArtwork(song.id, ArtworkType.AUDIO),
-                      builder: (context, artworkSnapshot) {
-                        if (artworkSnapshot.hasData && artworkSnapshot.data != null) {
-                          return CircleAvatar(
-                            backgroundImage: MemoryImage(artworkSnapshot.data!),
-                          );
-                        } else {
-                          return const CircleAvatar(
-                            child: Icon(Icons.music_note),
-                          );
-                        }
-                      },
-                    ),
-                    title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(song.artist ?? 'Unknown Artist', maxLines: 1, overflow: TextOverflow.ellipsis),
-                    trailing: isLoading
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.0))
-                        : IconButton(
-                            icon: Icon(isThisSongPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
-                            iconSize: 32.0,
-                            onPressed: () {
-                              if (isThisSongPlaying) {
-                                musicProvider.pause();
-                              } else {
-                                // Set the whole album as the playlist and start from the tapped song
-                                musicProvider.setPlaylist(songsInAlbum, initialIndex: index);
-                              }
-                            },
-                          ),
-                    onTap: () {
-                        if (isThisSongPlaying) {
-                          musicProvider.pause();
-                        } else {
-                          musicProvider.setPlaylist(songsInAlbum, initialIndex: index);
-                        }
+                      return ListTile(
+                        leading: FutureBuilder<Uint8List?>(
+                          future: musicProvider.getArtwork(song.id, ArtworkType.AUDIO),
+                          builder: (context, artworkSnapshot) {
+                            if (artworkSnapshot.hasData && artworkSnapshot.data != null) {
+                              return CircleAvatar(
+                                backgroundImage: MemoryImage(artworkSnapshot.data!),
+                              );
+                            } else {
+                              return const CircleAvatar(
+                                child: Icon(Icons.music_note),
+                              );
+                            }
+                          },
+                        ),
+                        title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(song.artist ?? 'Unknown Artist', maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: isLoading
+                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.0))
+                            : IconButton(
+                                icon: Icon(isThisSongPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                                iconSize: 32.0,
+                                onPressed: () {
+                                  if (isThisSongPlaying) {
+                                    musicProvider.pause();
+                                  } else {
+                                    // Set the whole album as the playlist and start from the tapped song
+                                    musicProvider.setPlaylist(songsInAlbum, initialIndex: index);
+                                  }
+                                },
+                              ),
+                        onTap: () {
+                            if (isThisSongPlaying) {
+                              musicProvider.pause();
+                            } else {
+                              musicProvider.setPlaylist(songsInAlbum, initialIndex: index);
+                            }
+                        },
+                      );
                     },
                   );
-                },
+                }
               );
             },
           );

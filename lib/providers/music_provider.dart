@@ -5,6 +5,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:oxcy/models/search_models.dart';
+import 'package:oxcy/services/oxcy_api_service.dart';
 
 // Helper to convert MediaItem to a consistent Song object
 Song _songFromMediaItem(MediaItem mediaItem) {
@@ -51,6 +52,7 @@ class MusicProvider with ChangeNotifier {
   
   // Expose the playback state stream for widgets that need to react to multiple state changes
   Stream<PlaybackState> get playbackState => _audioHandler.playbackState;
+  Stream<MediaItem?> get mediaItem => _audioHandler.mediaItem;
   
   // Provide a simple getter for the current playing state
   bool get isPlaying => _audioHandler.playbackState.value.playing;
@@ -81,6 +83,24 @@ class MusicProvider with ChangeNotifier {
       }
       notifyListeners();
     });
+  }
+  
+  Future<Map<String, List<SearchResult>>> search(String query) async {
+    final results = await OxcyApiService.searchAll(query);
+    if (results != null) {
+      final searchResults = <String, List<SearchResult>>{};
+      final songs = (results['songs']?['results'] as List? ?? []).map((e) => Song.fromJson(e)).toList();
+      final albums = (results['albums']?['results'] as List? ?? []).map((e) => Album.fromJson(e)).toList();
+      final artists = (results['artists']?['results'] as List? ?? []).map((e) => Artist.fromJson(e)).toList();
+      
+      searchResults['songs'] = songs;
+      searchResults['albums'] = albums;
+      searchResults['artists'] = artists;
+      
+      return searchResults;
+    } else {
+      return {};
+    }
   }
 
   /// Sets the audio handler's queue and starts playing from a specific index.
