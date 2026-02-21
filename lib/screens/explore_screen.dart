@@ -22,7 +22,43 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   void initState() {
     super.initState();
-    _exploreData = OxcyApiService.getHomePageData();
+    // Correctly initialize the data fetching.
+    _exploreData = _initExploreData();
+  }
+
+  /// Fetches data from the API and processes it into the format required by the UI.
+  Future<Map<String, List<SearchResult>>> _initExploreData() async {
+    // 1. Fetch the raw data from the correct API method.
+    final dynamic rawData = await OxcyApiService.getHomeData();
+
+    // 2. Validate the received data.
+    if (rawData == null || rawData is! Map<String, dynamic>) {
+      throw Exception('Failed to load or parse home page data.');
+    }
+
+    // 3. Process the raw map into a structured Map<String, List<SearchResult>>.
+    final Map<String, List<SearchResult>> exploreContent = {};
+
+    // The API returns different modules. We extract the ones we need.
+    // Process 'albums'.
+    if (rawData.containsKey('albums') && rawData['albums'] is List) {
+      exploreContent['albums'] = (rawData['albums'] as List)
+          .map((albumJson) => Album.fromJson(albumJson))
+          .toList();
+    }
+
+    // Process 'artists' which are nested inside the 'trending' module.
+    if (rawData.containsKey('trending') &&
+        rawData['trending'] is Map &&
+        rawData['trending'].containsKey('artists') &&
+        rawData['trending']['artists'] is List) {
+      exploreContent['artists'] =
+          (rawData['trending']['artists'] as List)
+              .map((artistJson) => Artist.fromJson(artistJson))
+              .toList();
+    }
+
+    return exploreContent;
   }
 
   @override
@@ -40,19 +76,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
         ],
       ),
+      // Use a FutureBuilder to handle the asynchronous data loading.
       body: FutureBuilder<Map<String, List<SearchResult>>>(
         future: _exploreData,
         builder: (context, snapshot) {
+          // Show a loading spinner while waiting for data.
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+          // Show an error message if data fetching fails.
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
+          // Show a message if there is no data to display.
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('No music content available.'));
           }
 
+          // If data is available, build the main content.
           return _buildExploreContent(snapshot.data!);
         },
       ),
@@ -60,16 +101,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Widget _buildExploreContent(Map<String, List<SearchResult>> data) {
+    // Extract the lists of albums and artists from the processed data.
     final albums = data['albums'] ?? [];
     final artists = data['artists'] ?? [];
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 120),
+      padding: const EdgeInsets.only(bottom: 120), // Padding for the mini-player
       children: [
         if (albums.isNotEmpty)
           _buildHorizontalSection<Album>('Top Albums', albums.cast<Album>()),
         if (artists.isNotEmpty)
-          _buildHorizontalSection<Artist>('Top Artists', artists.cast<Artist>()),
+          _buildHorizontalSection<Artist>(
+              'Top Artists', artists.cast<Artist>()),
       ],
     );
   }
