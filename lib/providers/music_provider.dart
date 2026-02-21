@@ -86,21 +86,7 @@ class MusicProvider with ChangeNotifier {
   }
   
   Future<Map<String, List<SearchResult>>> search(String query) async {
-    final results = await OxcyApiService.searchAll(query);
-    if (results != null) {
-      final searchResults = <String, List<SearchResult>>{};
-      final songs = (results['songs']?['results'] as List? ?? []).map((e) => Song.fromJson(e)).toList();
-      final albums = (results['albums']?['results'] as List? ?? []).map((e) => Album.fromJson(e)).toList();
-      final artists = (results['artists']?['results'] as List? ?? []).map((e) => Artist.fromJson(e)).toList();
-      
-      searchResults['songs'] = songs;
-      searchResults['albums'] = albums;
-      searchResults['artists'] = artists;
-      
-      return searchResults;
-    } else {
-      return {};
-    }
+    return await OxcyApiService.searchAll(query);
   }
 
   /// Sets the audio handler's queue and starts playing from a specific index.
